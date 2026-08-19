@@ -93,3 +93,10 @@ class UsernameConflictError(AppError):
 
     status_code = 409
     error_code = "username_conflict"
+
+
+class InvalidPermissionCodeError(AppError):
+    """权限码不在 17 码白名单内。"""
+
+    status_code = 422
+    error_code = "invalid_permission_code"
