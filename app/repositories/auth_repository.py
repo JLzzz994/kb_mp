@@ -50,7 +50,8 @@ class AuthRepository:
         return [int(x) for x in (await self._session.execute(stmt)).scalars().all()]
 
     async def list_dept_ids_with_ancestors(self, dept_id: int) -> list[int]:
-        """查部门链（自身 + 父级递归）。演示期部门层级 ≤3 层，循环即可。"""
+        """查部门链（自身 + 父级递归）。演示期部门层级 ≤3 层循环即可；
+        如未来层级 ≥5 层，改用递归 CTE（WITH RECURSIVE）。"""
         ids: list[int] = []
         current_id: int | None = dept_id
         while current_id is not None:
@@ -76,19 +77,34 @@ class AuthRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def load_current_user(self, user_id: int) -> CurrentUser | None:
-        """组装 CurrentUser（含部门名 + 角色码 + 部门链 + 角色 id）。"""
-        user_row = (
-            await self._session.execute(select(UserRecord).where(UserRecord.id == user_id))
-        ).scalar_one_or_none()
+        """组装 CurrentUser（1 次 JOIN + 1 次部门链递归；原 4 次往返 → 2 次）。"""
+        # Query A: 单次 JOIN 同时拉 user + dept_name + role_codes + role_ids
+        stmt = (
+            select(
+                UserRecord,
+                DepartmentRecord.name.label("dept_name"),
+                RoleRecord.role_code,
+                RoleRecord.id.label("role_id"),
+            )
+            .outerjoin(DepartmentRecord, DepartmentRecord.id == UserRecord.department_id)
+            .outerjoin(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+            .outerjoin(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+            .where(UserRecord.id == user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+
+        # 第 1 行带 user 行；其余 2-3 列可能为 None（用户无部门 / 无角色）
+        user_row = next((r[0] for r in rows if r[0] is not None), None)
         if user_row is None or user_row.status != 1:
             return None
 
-        dept = await self.find_department(user_row.department_id)
-        if dept is None:
-            return None
+        dept_name = next((r[1] for r in rows if r[1] is not None), "")
 
-        role_codes = await self.list_role_codes(user_id)
-        await self.list_role_ids(user_id)
+        # 去重（多角色场景下 JOIN 笛卡尔积会被去重）
+        role_codes = sorted({r[2] for r in rows if r[2] is not None})
+        _ = [r[3] for r in rows if r[3] is not None]  # role_ids 当前未用，预留未来
+
+        # Query B: 部门链递归（演示期 ≤3 层循环；未来改 CTE）
         dept_ids = await self.list_dept_ids_with_ancestors(user_row.department_id)
 
         return CurrentUser(
@@ -96,6 +112,7 @@ class AuthRepository:
             username=user_row.username,
             display_name=user_row.display_name,
             department_id=user_row.department_id,
+            department_name=dept_name,
             role_codes=role_codes,
             dept_ids=dept_ids,
         )

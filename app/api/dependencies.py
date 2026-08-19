@@ -17,10 +17,12 @@ from app.common.errors import (
     AuthenticationError,
     PermissionDeniedError,
 )
+from app.config.settings import settings
 from app.domain.user import CurrentUser
 from app.infrastructure.database import get_db
 from app.infrastructure.jwt import JWTIssuer, get_jwt_issuer
 from app.infrastructure.redis_client import RedisClient, get_redis
+from app.repositories.auth_repository import AuthRepository
 from app.services.auth_service import build_auth_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -38,7 +40,8 @@ async def get_current_user(
     1. Bearer 头缺失 → AuthenticationError(401)
     2. jwt_issuer.verify() 失败 → InvalidAccessTokenError(401)
     3. AuthService.load_current_user 加载部门链/角色码/部门名
-    4. Redis 鉴权位图查询 → permissions（缺失则空列表，触发 RBAC 拦截）
+    4. Redis 鉴权位图查询 → permissions；缺失则回退 list_permissions(role_codes)
+       重算并写回位图（避免 Redis 重启 / 角色变更未触发 DEL 时所有受保护请求 403）
     5. 返回 CurrentUser
     """
     if credentials is None:
@@ -46,7 +49,17 @@ async def get_current_user(
     payload = jwt_issuer.verify(credentials.credentials)
     service = build_auth_service(session, jwt_issuer=jwt_issuer, redis=redis)
     current = await service.load_current_user(int(payload.sub))
-    current.permissions = await redis.get_bitmap(current.id) or []
+
+    cached = await redis.get_bitmap(current.id)
+    if cached is None:
+        # 位图缺失（TTL 过期 / Redis 重启 / 角色变更未触发 DEL）→ 自动重算
+        cached = await AuthRepository(session).list_permissions(current.role_codes)
+        await redis.set_bitmap(
+            user_id=current.id,
+            permissions=cached,
+            ttl=settings.auth_bitmap_ttl_seconds,
+        )
+    current.permissions = cached
     return current
 
 
