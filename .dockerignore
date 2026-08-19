@@ -1,0 +1,52 @@
+# 排除不需要打包到镜像的文件，缩小构建上下文
+.venv/
+.venv
+__pycache__/
+*.py[oc]
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+tests/
+.pytest_cache
+
+# 前端不打包（前端单独部署）
+frontend/
+
+# 文档不打包
+docs/
+
+# 交付物不打包（本地副本）
+交付物/
+
+# 演示存储数据
+storage/
+
+# 日志
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+.superpowers/
+.workbuddy/
+.workbuddy
+
+# Git
+.git
+.gitignore
+.github/
+
+# 编辑器临时
+*.swp
+*~
+
+# 演示配置（演示期镜像使用环境变量）
+.env
+.env.example
+.env.local
+
+# 审计/中间产物
+docs/audit/
+*.tmp
