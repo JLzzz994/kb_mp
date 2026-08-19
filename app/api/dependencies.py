@@ -67,13 +67,17 @@ CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 def require_permission(*codes: str) -> Callable:
-    """工厂：生成 FastAPI 依赖，校验 CurrentUser 是否含 codes 任一权限码。"""
+    """工厂：生成 FastAPI 依赖（裸 callable），校验 CurrentUser 是否含 codes 任一权限码。
+
+    用法：
+        @router.get(..., dependencies=[Depends(require_permission("user:read"))])
+    """
 
     async def checker(user: CurrentUserDep) -> None:
         if not any(code in user.permissions for code in codes):
             raise PermissionDeniedError(f"missing permission: {','.join(codes)}")
 
-    return Depends(checker)
+    return checker
 
 
 # ── 兼容占位（PR0 留下的 type alias，供后续模块平滑切换） ─────────────────────────────

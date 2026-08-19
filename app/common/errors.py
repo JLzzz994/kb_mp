@@ -82,9 +82,9 @@ class RoleNotFoundError(ResourceNotFoundError):
 
 
 class DepartmentNotEmptyError(AppError):
-    """部门下仍有用户��无法删除。"""
+    """部门下仍有用户或子部门，无法删除。"""
 
-    status_code = 409
+    status_code = 422
     error_code = "department_not_empty"
 
 
