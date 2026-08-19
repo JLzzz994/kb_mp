@@ -14,8 +14,17 @@ from app.api.schemas.faq_schema import (
     FaqResponse,
     FaqReviewRequest,
 )
+from app.api.schemas.knowledge_gap_schema import (
+    CreateUnitFromGapRequest,
+    CreateUnitFromGapResponse,
+    KnowledgeGapListResponse,
+)
 from app.infrastructure.redis_client import RedisClient
 from app.services.faq_service import FaqService, build_faq_service
+from app.services.knowledge_gap_service import (
+    KnowledgeGapService,
+    build_knowledge_gap_service,
+)
 
 router = APIRouter(tags=["settlement"])
 
@@ -99,3 +108,43 @@ async def review_faq(
 )
 async def delete_faq(faq_id: int, service: FaqServiceDep) -> None:
     await service.delete(faq_id)
+
+
+# ── 知识缺口 ─────────────────────────────
+
+
+def get_knowledge_gap_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KnowledgeGapService:
+    return build_knowledge_gap_service(session)
+
+
+KnowledgeGapServiceDep = Annotated[KnowledgeGapService, Depends(get_knowledge_gap_service)]
+
+
+@router.get(
+    "/api/v1/knowledge-gaps",
+    response_model=KnowledgeGapListResponse,
+    dependencies=[Depends(require_permission("gap:read"))],
+)
+async def list_knowledge_gaps(
+    service: KnowledgeGapServiceDep,
+    page: int = 1,
+    page_size: int = 20,
+    status: str | None = None,
+) -> KnowledgeGapListResponse:
+    return await service.list(page=page, page_size=page_size, status=status)
+
+
+@router.post(
+    "/api/v1/knowledge-gaps/{gap_id}/create-unit",
+    response_model=CreateUnitFromGapResponse,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
+async def create_unit_from_gap(
+    gap_id: int,
+    data: CreateUnitFromGapRequest,
+    user: CurrentUserDep,
+    service: KnowledgeGapServiceDep,
+) -> CreateUnitFromGapResponse:
+    return await service.one_click_create_unit(gap_id, data, user.id)
