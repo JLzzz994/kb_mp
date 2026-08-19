@@ -53,5 +53,31 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     max_total_upload_size_mb: int = 200
 
+    # ── Embedding 后端（本地 / 远程） ─────────────────────────────
+    # "local_bge"           → 本地 BGE-M3（魔搭下载）
+    # "remote_openai"        → 远程 OpenAI 兼容 API（如 DashScope）
+    embedding_backend: str = "local_bge"
+    bge_m3_path: str = "D:/ai_models/modelscope_cache/models/BAAI/bge-m3"
+    bge_m3_name: str = "BAAI/bge-m3"
+    bge_device: str = "cpu"
+    bge_fp16: bool = False
+    bge_use_fp16: bool = False
+    embedding_dim: int = 1024
+
+    # ── Rerank 后端 ─────────────────────────────
+    # "disabled" | "local_bge"
+    rerank_backend: str = "disabled"
+    bge_reranker_path: str = "D:/ai_models/modelscope_cache/models/rerank/BAAI/bge-reranker-large"
+    bge_reranker_device: str = "cpu"
+    bge_reranker_fp16: bool = False
+
+    # ── Milvus 远程服务 ─────────────────────────────
+    # 演示期 mock；生产期指向远程 Milvus（兼容 docker / 独立部署）
+    milvus_url: str = "http://39.105.7.90:19530"
+    milvus_collection: str = "kb_units"
+    milvus_index_metric: str = "COSINE"
+    milvus_index_m: int = 16
+    milvus_index_ef_construction: int = 64
+
 
 settings = Settings()

@@ -25,6 +25,16 @@ class EmbeddingPort(Protocol):
 
     async def embed(self, text: str) -> list[float]: ...
 
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class RerankPort(Protocol):
+    """重排序端口（演示期 disabled；M3.5+ 启用 BGE-Reranker-Large）。"""
+
+    async def rerank(
+        self, query: str, documents: list[str], top_k: int | None = None
+    ) -> list[tuple[int, float]]: ...
+
 
 @dataclass(slots=True)
 class GraphContext:
@@ -35,6 +45,13 @@ class GraphContext:
     milvus: MilvusSearchPort | None = None
     llm: LLMStreamPort | None = None
     embedding: EmbeddingPort | None = None
+    rerank: RerankPort | None = None
 
 
-__all__ = ["GraphContext", "MilvusSearchPort", "LLMStreamPort", "EmbeddingPort"]
+__all__ = [
+    "GraphContext",
+    "MilvusSearchPort",
+    "LLMStreamPort",
+    "EmbeddingPort",
+    "RerankPort",
+]
