@@ -45,5 +45,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha,scope=${{ github.repository }}
-          platforms: linux/amd64
+          # 不使用 cache（首次部署；后续开启）
+          # cache-from: type=gha,scope=${{ github.repository }}
+          # 不限定 platforms（ubuntu-latest 是 amd64 原生）
