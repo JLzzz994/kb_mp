@@ -18,6 +18,13 @@ wheels/
 .vscode/
 *.swp
 
+# Claude Code workflow artifacts
+.superpowers/
+.workbuddy/
+
+# P0 阶段：测试代码另存（编码阶段再 untrack + 落库）
+tests/
+
 # Logs
 *.log
 logs/
