@@ -34,6 +34,13 @@ docker compose --profile dev up -d attu
 # 浏览器访问 http://localhost:8000
 ```
 
+## 注意事项
+
+- **Milvus 仅 Linux 生产环境支持**：Milvus 2.4.24 + Docker Desktop for Windows 存在 grpc HTTP/2 兼容性问题（panic exit 134）。
+  - 演示期：跳过 Milvus（87 用例的 M4 走 mock 分支）
+  - 生产环境（Linux）：`docker compose --profile full up -d milvus` 启用
+- **MySQL/Redis 资源**：演示期 1GB 内存起步；含 Milvus 总需 8GB+
+
 ## 完整清理（含数据卷）
 
 ```bash
