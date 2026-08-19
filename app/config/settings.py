@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_temperature: float = 0.3
     embedding_model: str = "text-embedding-3-small"
 
     # ── Milvus（M3 使用） ─────────────────────────────

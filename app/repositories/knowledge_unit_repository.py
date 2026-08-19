@@ -35,6 +35,21 @@ class KnowledgeUnitRepository:
         status: str | None,
     ) -> tuple[list[tuple[KnowledgeUnitRecord, str, int]], int]:
         """分页 + 含 creator_name + permissions_count。"""
+        # 过滤条件（主查询与计数查询共用）
+        conditions = []
+        if keyword:
+            conditions.append(
+                or_(
+                    KnowledgeUnitRecord.title.like(f"%{keyword}%"),
+                    KnowledgeUnitRecord.unit_code.like(f"%{keyword}%"),
+                    KnowledgeUnitRecord.content.like(f"%{keyword}%"),
+                )
+            )
+        if category:
+            conditions.append(KnowledgeUnitRecord.category == category)
+        if status:
+            conditions.append(KnowledgeUnitRecord.status == status)
+
         stmt = (
             select(
                 KnowledgeUnitRecord,
@@ -44,21 +59,14 @@ class KnowledgeUnitRepository:
             .outerjoin(UserRecord, UserRecord.id == KnowledgeUnitRecord.creator_id)
             .outerjoin(UnitPermissionRecord, UnitPermissionRecord.unit_id == KnowledgeUnitRecord.id)
         )
-        if keyword:
-            stmt = stmt.where(
-                or_(
-                    KnowledgeUnitRecord.title.like(f"%{keyword}%"),
-                    KnowledgeUnitRecord.unit_code.like(f"%{keyword}%"),
-                    KnowledgeUnitRecord.content.like(f"%{keyword}%"),
-                )
-            )
-        if category:
-            stmt = stmt.where(KnowledgeUnitRecord.category == category)
-        if status:
-            stmt = stmt.where(KnowledgeUnitRecord.status == status)
+        if conditions:
+            stmt = stmt.where(*conditions)
 
-        # 总数
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        # 总数：仅按过滤条件统计单元数，不把聚合子查询包一层
+        # （ONLY_FULL_GROUP_BY 下，聚合 + 普通列混选且无 GROUP BY 会报 1140）
+        count_stmt = select(func.count(KnowledgeUnitRecord.id))
+        if conditions:
+            count_stmt = count_stmt.where(*conditions)
         total = int((await self._session.execute(count_stmt)).scalar_one())
 
         # 分页

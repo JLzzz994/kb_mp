@@ -52,12 +52,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Milvus 向量库（仅 Linux 生产环境；Windows Docker Desktop 当前有 grpc 兼容性问题，演示期可跳过）
+  # ── Milvus 向量库
+  # 注意：Windows Docker Desktop 调试时 grpc panic（已在 README 标记）；演示期不强制启动
   milvus:
     container_name: kb_mp_milvus
-    image: milvusdb/milvus:v2.4.24
+    image: milvusdb/milvus:v2.5.4
     command: ["milvus", "run", "standalone"]
-    profiles: ["full"]  # 演示期不自动启（`docker compose --profile full up` 启用）
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000

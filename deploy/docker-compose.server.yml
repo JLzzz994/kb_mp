@@ -1,0 +1,15 @@
+# kb_mp 服务器端覆盖：基础服务仅绑 127.0.0.1（走 SSH 隧道，不暴露公网）
+# redis 6379 被服务器上 risk-redis 占用 → 本实例改用 6380
+# 注意：compose 对 ports 列表默认是追加，必须用 !override 显式替换，否则原 0.0.0.0:6379 仍生效
+# etcd / minio 原文件即不发布宿主端口，无需覆盖
+services:
+  mysql:
+    ports: !override
+      - "127.0.0.1:3306:3306"
+  redis:
+    ports: !override
+      - "127.0.0.1:6380:6379"
+  milvus:
+    ports: !override
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:9091:9091"

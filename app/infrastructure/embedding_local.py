@@ -30,9 +30,7 @@ class LocalBGEEmbedding:
         try:
             from sentence_transformers import SentenceTransformer
 
-            self._encoder = SentenceTransformer(
-                self._model_path, device=self._device
-            )
+            self._encoder = SentenceTransformer(self._model_path, device=self._device)
         except ImportError as exc:
             raise RuntimeError(
                 "sentence-transformers not installed. `uv pip install sentence-transformers`"

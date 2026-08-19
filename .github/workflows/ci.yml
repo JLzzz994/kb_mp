@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: ruff + pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --user uv
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Lint (ruff format check)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Run unit tests (skip e2e_t7_real_vectorize — needs real services)
+        run: uv run pytest --ignore=tests/test_e2e_t7_real_vectorize.py -v
+
+      - name: Run all tests including e2e
+        run: uv run pytest -v
+        continue-on-error: true  # e2e 需要真实服务，演示环境失败属正常

@@ -23,7 +23,7 @@ wheels/
 .workbuddy/
 
 # P0 阶段：测试代码另存（编码阶段再 untrack + 落库）
-tests/
+# tests/  -- 已迁移到正式仓库，CI 需访问
 
 # Logs
 *.log
@@ -34,3 +34,6 @@ logs/
 .ruff_cache/
 htmlcov/
 .coverage
+
+# 上传文件存储目录（运行时数据）
+storage/

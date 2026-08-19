@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "description": "kb_mp 演示种子数据集：5 条知识单元 + 5 条 FAQ + 6 类问答示例",
+  "knowledge_units": [
+    {
+      "unit_code": "KU-001",
+      "title": "kb_mp 平台介绍",
+      "category": "产品",
+      "summary": "kb_mp 是企业级 AI 知识库管理平台",
+      "content_hash_source": "01-kb_mp-平台介绍.md",
+      "permissions": [{"target_type": "global", "target_id": null}],
+      "tags": ["平台", "概述", "产品"]
+    },
+    {
+      "unit_code": "KU-002",
+      "title": "kb_mp 部署指南",
+      "category": "运维",
+      "summary": "本地 + Docker 部署步骤",
+      "content_hash_source": "02-kb_mp-部署指南.md",
+      "permissions": [{"target_type": "global", "target_id": null}],
+      "tags": ["部署", "Docker", "运维"]
+    },
+    {
+      "unit_code": "KU-003",
+      "title": "研发中心技术规范",
+      "category": "规范",
+      "summary": "代码 / API / 数据库 / AI 工程规范",
+      "content_hash_source": "03-研发中心技术规范.md",
+      "permissions": [
+        {"target_type": "department", "target_id": 1}
+      ],
+      "tags": ["规范", "代码", "API"]
+    },
+    {
+      "unit_code": "KU-004",
+      "title": "常见问题 FAQ 清单",
+      "category": "FAQ",
+      "summary": "5 条演示 FAQ，覆盖账号/AI/知识/看板/缺口",
+      "content_hash_source": "04-FAQ清单.md",
+      "permissions": [{"target_type": "global", "target_id": null}],
+      "tags": ["FAQ", "问答"]
+    },
+    {
+      "unit_code": "KU-005",
+      "title": "kb_mp 接口约定",
+      "category": "API",
+      "summary": "43 端点完整接口说明（鉴权 / 组织 / 知识 / AI / 看板 / FAQ）",
+      "content_hash_source": "04-接口文档/接口清单.md",
+      "permissions": [{"target_type": "global", "target_id": null}],
+      "tags": ["API", "接口", "开发"]
+    }
+  ],
+  "faqs": [
+    {
+      "question": "如何重置密码？",
+      "category": "账号",
+      "answer": "联系系统管理员，进入用户管理 → 重置密码",
+      "related_unit_code": "KU-001"
+    },
+    {
+      "question": "AI 问答召回不到我的知识怎么办？",
+      "category": "AI",
+      "answer": "检查知识单元状态、权限配置和 SSE 流中的 unauthorized 事件",
+      "related_unit_code": "KU-001"
+    },
+    {
+      "question": "知识导入支持哪些格式？",
+      "category": "知识",
+      "answer": "支持 md/pdf/docx/txt，单文件 20MB，单批次 200MB",
+      "related_unit_code": "KU-002"
+    },
+    {
+      "question": "数据看板的时间范围如何选择？",
+      "category": "看板",
+      "answer": "默认 30 天，可通过 ?range=7 或 ?range=24 切换",
+      "related_unit_code": "KU-001"
+    },
+    {
+      "question": "知识缺口如何处理？",
+      "category": "沉淀",
+      "answer": "进入缺口列表 → 一键建档 → 补充内容 → 发布",
+      "related_unit_code": "KU-001"
+    }
+  ],
+  "demo_questions": [
+    "kb_mp 平台是什么？",
+    "如何部署 kb_mp？",
+    "AI 问答的工作原理是什么？",
+    "数据看板展示哪些指标？",
+    "知识缺口如何识别？",
+    "FAQ 审核流程是怎样的？"
+  ]
+}

@@ -5,7 +5,6 @@ from __future__ import annotations
 import httpx
 
 from app.config.settings import settings
-from app.workflows.context import LLMStreamPort
 
 
 class RemoteOpenAIStream:
@@ -21,9 +20,7 @@ class RemoteOpenAIStream:
         self._api_key = api_key or settings.openai_api_key
         self._base_url = (base_url or settings.openai_base_url).rstrip("/")
         self._model = model or settings.openai_model
-        self._temperature = (
-            temperature if temperature is not None else settings.openai_temperature
-        )
+        self._temperature = temperature if temperature is not None else settings.openai_temperature
 
     async def stream(self, prompt: str) -> tuple[str, dict]:
         """同步返回完整答案 + usage（演示版不分 chunk 流）；生产可改 SSE 流。

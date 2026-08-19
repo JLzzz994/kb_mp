@@ -46,6 +46,7 @@ tests/
 ```python
 # app/services/faq_cache_service.py
 """FAQ 缓存同步服务：审核发布后写入 Redis；M4 命中时校验单元版本。"""
+
 from datetime import datetime
 import hashlib
 
@@ -91,11 +92,16 @@ class FaqCacheService:
     async def set(self, faq: FaqRecord) -> None:
         """写入 Redis 缓存。"""
         key = f"faq:cache:{self.compute_hash(faq.question)}"
-        await self._redis.hset(key, mapping={
-            "answer": faq.answer,
-            "related_unit_id": str(faq.related_unit_id or 0),
-            "unit_updated_at": faq.unit_updated_at_snapshot.isoformat() if faq.unit_updated_at_snapshot else "",
-        })
+        await self._redis.hset(
+            key,
+            mapping={
+                "answer": faq.answer,
+                "related_unit_id": str(faq.related_unit_id or 0),
+                "unit_updated_at": faq.unit_updated_at_snapshot.isoformat()
+                if faq.unit_updated_at_snapshot
+                else "",
+            },
+        )
         logger.info("faq.cache.set hash={}", self.compute_hash(faq.question)[:8])
 
     async def delete(self, question: str) -> None:
@@ -131,7 +137,7 @@ class FaqReviewService:
         faq_repo: FaqRepository,
         unit_repo: KnowledgeUnitRepository,
         cache: FaqCacheService,
-        session: AsyncSession,             # C3 修复
+        session: AsyncSession,  # C3 修复
     ):
         self._repo = faq_repo
         self._unit_repo = unit_repo
@@ -223,7 +229,7 @@ class FaqService:
         self,
         faq_repo: FaqRepository,
         faq_cache: FaqCacheService,
-        session: AsyncSession,             # C3 修复
+        session: AsyncSession,  # C3 修复
     ):
         self._repo = faq_repo
         self._cache = faq_cache
@@ -250,15 +256,17 @@ class FaqService:
         existing = await self._repo.find_by_hash(question_hash)
         if existing is not None:
             raise ValidationError("faq.question_exists")
-        record = await self._repo.insert(FaqRecord(
-            question=data.question,
-            question_hash=question_hash,
-            answer=data.answer,
-            category=data.category,
-            related_unit_id=data.related_unit_id,
-            source_type="manual",
-            status="pending_review",
-        ))
+        record = await self._repo.insert(
+            FaqRecord(
+                question=data.question,
+                question_hash=question_hash,
+                answer=data.answer,
+                category=data.category,
+                related_unit_id=data.related_unit_id,
+                source_type="manual",
+                status="pending_review",
+            )
+        )
         return self._to_response(record)
 
     async def update(self, faq_id: int, data: FaqUpdateRequest, user: CurrentUser) -> FaqResponse:
@@ -309,7 +317,7 @@ class KnowledgeGapService:
     def __init__(
         self,
         gap_repo: KnowledgeGapRepository,
-        session: AsyncSession,             # C3 修复
+        session: AsyncSession,  # C3 修复
     ):
         self._repo = gap_repo
         self._session = session
@@ -334,7 +342,8 @@ class KnowledgeGapService:
         top1 = recalled_units[0]["score"] if recalled_units else 0.0
         top3_avg = (
             sum(u["score"] for u in recalled_units[:3]) / min(3, len(recalled_units))
-            if recalled_units else 0.0
+            if recalled_units
+            else 0.0
         )
         # 2. 阈值
         if not (top1 < 0.5 and top3_avg < 0.55):
@@ -358,11 +367,14 @@ class KnowledgeGapService:
                 ),
                 updated_at = NOW()
         """)
-        await self._session.execute(stmt, {
-            "pattern": pattern,
-            "hash": pattern_hash,
-            "question": question,
-        })
+        await self._session.execute(
+            stmt,
+            {
+                "pattern": pattern,
+                "hash": pattern_hash,
+                "question": question,
+            },
+        )
 
         # 5. 裁剪
         await self._trim_samples(pattern_hash, keep=20)
@@ -396,8 +408,8 @@ class KnowledgeGapService:
         gap_id: int,
         req: CreateUnitFromGapRequest,
         user: CurrentUser,
-        knowledge_unit_service: KnowledgeUnitService,    # M3 服务
-        permission_service: KnowledgePermissionService,    # M3 服务
+        knowledge_unit_service: KnowledgeUnitService,  # M3 服务
+        permission_service: KnowledgePermissionService,  # M3 服务
     ) -> KnowledgeUnitResponse:
         """一键建档：创建 knowledge_unit + 配置权限 + 回填 gap。
 
@@ -417,7 +429,7 @@ class KnowledgeGapService:
             raise KnowledgeGapAlreadyResolvedError(gap_id)
 
         # 2. 内容预填
-        sample_questions = gap.sample_questions_json[:5]   # 最多 5 条样例
+        sample_questions = gap.sample_questions_json[:5]  # 最多 5 条样例
         prefilled_content = (
             f"# {req.title}\n\n"
             f"## 常见提问\n\n"
@@ -428,6 +440,7 @@ class KnowledgeGapService:
 
         # 3. 创建 unit（经 M3 服务）
         from app.services.knowledge_unit_service import KnowledgeUnitService
+
         unit = await knowledge_unit_service.create(
             data=KnowledgeUnitCreate(
                 title=req.title,
@@ -461,6 +474,7 @@ class KnowledgeGapService:
 ```python
 # app/services/faq_mining_service.py
 """FAQ 自动挖掘：每日 02:00 触发。"""
+
 from collections import defaultdict
 from datetime import datetime, timedelta
 from sqlalchemy import text
@@ -506,9 +520,15 @@ class FaqMiningService:
             GROUP BY question, recalled_unit_ids_json
             HAVING c >= :min_freq
         """)
-        rows = (await self._session.execute(stmt, {
-            "cutoff": cutoff, "min_freq": self.MIN_FREQ,
-        })).all()
+        rows = (
+            await self._session.execute(
+                stmt,
+                {
+                    "cutoff": cutoff,
+                    "min_freq": self.MIN_FREQ,
+                },
+            )
+        ).all()
 
         if not rows:
             return 0
@@ -548,9 +568,7 @@ class FaqMiningService:
             related_unit_id = top_unit_ids[0] if top_unit_ids else None
 
             # 5.4 计算 question_hash
-            question_hash = hashlib.sha1(
-                representative_q.lower().strip().encode()
-            ).hexdigest()
+            question_hash = hashlib.sha1(representative_q.lower().strip().encode()).hexdigest()
 
             # 6. 跳过已存在
             existing = await self._faq_repo.find_by_hash(question_hash)
@@ -558,16 +576,18 @@ class FaqMiningService:
                 continue
 
             # 7. INSERT
-            await self._faq_repo.insert(FaqRecord(
-                question=representative_q,
-                question_hash=question_hash,
-                answer="",       # 待人工填写
-                category=None,
-                related_unit_id=related_unit_id,
-                source_type="auto_mined",
-                status="pending_review",
-                hit_count=0,
-            ))
+            await self._faq_repo.insert(
+                FaqRecord(
+                    question=representative_q,
+                    question_hash=question_hash,
+                    answer="",  # 待人工填写
+                    category=None,
+                    related_unit_id=related_unit_id,
+                    source_type="auto_mined",
+                    status="pending_review",
+                    hit_count=0,
+                )
+            )
             created_count += 1
 
         await self._session.commit()
@@ -586,6 +606,7 @@ class FaqMiningService:
         调用方负责把 idx 映射回 (question, freq, unit_ids_json) 三元组。
         """
         import numpy as np
+
         if not embeddings:
             return []
 
@@ -638,7 +659,7 @@ def start_scheduler(faq_mining: FaqMiningService) -> AsyncIOScheduler:
         id="faq_mining_daily",
         name="FAQ 自动挖掘（每日 02:00）",
         replace_existing=True,
-        misfire_grace_time=3600,           # 1 小时宽限
+        misfire_grace_time=3600,  # 1 小时宽限
         max_instances=1,
     )
 
@@ -669,8 +690,8 @@ class FaqResponse(BaseModel):
     answer: str
     category: str | None
     related_unit_id: int | None
-    source_type: str                       # "manual" | "auto_mined"
-    status: str                            # "pending_review" | "published" | "rejected"
+    source_type: str  # "manual" | "auto_mined"
+    status: str  # "pending_review" | "published" | "rejected"
     hit_count: int
     reviewer_id: int | None
     reviewed_at: datetime | None
@@ -697,11 +718,13 @@ class FaqUpdateRequest(BaseModel):
 
     仅 answer 可编辑；rejected 状态的 FAQ 不可调用本接口（路由层校验）。
     """
+
     answer: str | None = Field(default=None, min_length=1, max_length=10000)
 
 
 class FaqReviewRequest(BaseModel):
     """POST /api/v1/faqs/{faq_id}/review 审核请求体。"""
+
     action: Literal["approve", "reject"]
     edited_answer: str | None = Field(default=None, max_length=10000)
 
@@ -712,7 +735,7 @@ class KnowledgeGapResponse(BaseModel):
     sample_questions_json: list[str]
     ask_count: int
     last_asked_at: datetime | None
-    status: str                            # "unresolved" | "resolved" | "ignored"
+    status: str  # "unresolved" | "resolved" | "ignored"
     resolved_unit_id: int | None
     created_at: datetime
     updated_at: datetime
@@ -720,6 +743,7 @@ class KnowledgeGapResponse(BaseModel):
 
 class CreateUnitFromGapRequest(BaseModel):
     """POST /api/v1/knowledge-gaps/{id}/create-unit 一键建档请求体。"""
+
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     category: str | None = Field(default=None, max_length=64)
@@ -738,8 +762,10 @@ router = APIRouter(prefix="/api/v1", tags=["knowledge-settlement"])
 
 # --- FAQ ---
 
-@router.get("/faqs", response_model=FaqListResponse,
-            dependencies=[Depends(require_permission("faq:read"))])
+
+@router.get(
+    "/faqs", response_model=FaqListResponse, dependencies=[Depends(require_permission("faq:read"))]
+)
 async def list_faqs(
     service: FaqServiceDep,
     page: int = Query(1, ge=1),
@@ -747,29 +773,48 @@ async def list_faqs(
     status: str | None = None,
     source_type: str | None = None,
 ):
-    return await service.list(page=page, page_size=page_size, status=status, source_type=source_type)
+    return await service.list(
+        page=page, page_size=page_size, status=status, source_type=source_type
+    )
 
 
-@router.get("/faqs/recommendations", response_model=FaqListResponse,
-            dependencies=[Depends(require_permission("faq:read"))])
-async def list_recommendations(service: FaqServiceDep, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+@router.get(
+    "/faqs/recommendations",
+    response_model=FaqListResponse,
+    dependencies=[Depends(require_permission("faq:read"))],
+)
+async def list_recommendations(
+    service: FaqServiceDep, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)
+):
     return await service.list_recommendations(page, page_size)
 
 
-@router.post("/faqs", response_model=FaqResponse, status_code=201,
-             dependencies=[Depends(require_permission("faq:write"))])
+@router.post(
+    "/faqs",
+    response_model=FaqResponse,
+    status_code=201,
+    dependencies=[Depends(require_permission("faq:write"))],
+)
 async def create_faq(data: CreateFaqRequest, user: CurrentUserDep, service: FaqServiceDep):
     return await service.create(data, user)
 
 
-@router.patch("/faqs/{faq_id}", response_model=FaqResponse,
-              dependencies=[Depends(require_permission("faq:write"))])
-async def update_faq(faq_id: int, data: FaqUpdateRequest, user: CurrentUserDep, service: FaqServiceDep):
+@router.patch(
+    "/faqs/{faq_id}",
+    response_model=FaqResponse,
+    dependencies=[Depends(require_permission("faq:write"))],
+)
+async def update_faq(
+    faq_id: int, data: FaqUpdateRequest, user: CurrentUserDep, service: FaqServiceDep
+):
     return await service.update(faq_id, data, user)
 
 
-@router.post("/faqs/{faq_id}/review", response_model=FaqResponse,
-             dependencies=[Depends(require_permission("faq:review"))])
+@router.post(
+    "/faqs/{faq_id}/review",
+    response_model=FaqResponse,
+    dependencies=[Depends(require_permission("faq:review"))],
+)
 async def review_faq(
     faq_id: int,
     req: FaqReviewRequest,
@@ -782,16 +827,21 @@ async def review_faq(
         return await service.reject(faq_id, user)
 
 
-@router.delete("/faqs/{faq_id}", status_code=204,
-               dependencies=[Depends(require_permission("faq:write"))])
+@router.delete(
+    "/faqs/{faq_id}", status_code=204, dependencies=[Depends(require_permission("faq:write"))]
+)
 async def delete_faq(faq_id: int, user: CurrentUserDep, service: FaqServiceDep):
     await service.delete(faq_id, user)
 
 
 # --- 知识缺口 ---
 
-@router.get("/knowledge-gaps", response_model=list[KnowledgeGapResponse],
-            dependencies=[Depends(require_permission("gap:read"))])
+
+@router.get(
+    "/knowledge-gaps",
+    response_model=list[KnowledgeGapResponse],
+    dependencies=[Depends(require_permission("gap:read"))],
+)
 async def list_gaps(
     service: KnowledgeGapServiceDep,
     status: str | None = Query(None, pattern=r"^(unresolved|resolved|ignored)$"),
@@ -801,8 +851,11 @@ async def list_gaps(
     return await service.list(status=status, page=page, page_size=page_size)
 
 
-@router.post("/knowledge-gaps/{gap_id}/create-unit", response_model=KnowledgeUnitResponse,
-             dependencies=[Depends(require_permission("knowledge:write"))])
+@router.post(
+    "/knowledge-gaps/{gap_id}/create-unit",
+    response_model=KnowledgeUnitResponse,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
 async def create_unit_from_gap(
     gap_id: int,
     req: CreateUnitFromGapRequest,
@@ -820,7 +873,6 @@ async def create_unit_from_gap(
 # tests/test_faq_review.py
 @pytest.mark.asyncio
 class TestFaqReview:
-
     async def test_approve_writes_redis_cache(
         self, async_client, knowledge_admin_token, seeded_pending_faq, redis_client
     ):
@@ -835,6 +887,7 @@ class TestFaqReview:
 
         # Redis 缓存写入
         from app.services.faq_cache_service import FaqCacheService
+
         expected_hash = FaqCacheService.compute_hash(body["question"])
         cached = await redis_client.hgetall(f"faq:cache:{expected_hash}")
         assert cached["answer"] == "标准答案"
@@ -872,16 +925,18 @@ class TestFaqReview:
 # tests/test_faq_cache_sync.py
 @pytest.mark.asyncio
 class TestFaqCacheSync:
-
     async def test_cache_version_mismatch_invalidates(
         self, faq_cache_service, redis_client, unit_repo_mock
     ):
         # 写入缓存（v1）
-        await redis_client.hset("faq:cache:test", mapping={
-            "answer": "v1 answer",
-            "related_unit_id": "1",
-            "unit_updated_at": "2026-01-01T00:00:00",
-        })
+        await redis_client.hset(
+            "faq:cache:test",
+            mapping={
+                "answer": "v1 answer",
+                "related_unit_id": "1",
+                "unit_updated_at": "2026-01-01T00:00:00",
+            },
+        )
         # mock unit_repo 返回不同版本
         unit_repo_mock.get_updated_at.return_value = datetime(2026, 8, 19)
         result = await faq_cache_service.get("test question")
@@ -892,7 +947,6 @@ class TestFaqCacheSync:
 # tests/test_faq_mining_job.py
 @pytest.mark.asyncio
 class TestMining:
-
     async def test_mining_groups_similar_questions(self, seeded_logs):
         mining = FaqMiningService(...)
         count = await mining.run()
@@ -917,18 +971,21 @@ class TestMining:
 # tests/test_knowledge_gap.py
 @pytest.mark.asyncio
 class TestGap:
-
     async def test_record_top1_top3_threshold(self, gap_service):
         # 满足阈值
         recorded = await gap_service.record(
-            session_id="s1", user_id=1, question="x",
+            session_id="s1",
+            user_id=1,
+            question="x",
             recalled_units=[{"id": 1, "score": 0.3}, {"id": 2, "score": 0.4}],
         )
         assert recorded is True
 
         # 不满足（Top-1 >= 0.5）
         not_recorded = await gap_service.record(
-            session_id="s2", user_id=1, question="y",
+            session_id="s2",
+            user_id=1,
+            question="y",
             recalled_units=[{"id": 1, "score": 0.8}, {"id": 2, "score": 0.7}],
         )
         assert not_recorded is False
@@ -938,7 +995,9 @@ class TestGap:
         await gap_service.record("s2", 1, "Q variant", [])
         # ask_count 应为 2
 
-    async def test_one_click_create_unit_resolves_gap(self, async_client, knowledge_admin_token, seeded_gap):
+    async def test_one_click_create_unit_resolves_gap(
+        self, async_client, knowledge_admin_token, seeded_gap
+    ):
         req = {
             "title": "新知识",
             "content": "...",
@@ -952,22 +1011,25 @@ class TestGap:
         )
         assert resp.status_code == 200
         # gap 应更新
-        gap_resp = await async_client.get("/api/v1/knowledge-gaps?status=resolved", headers=auth_header(knowledge_admin_token))
+        gap_resp = await async_client.get(
+            "/api/v1/knowledge-gaps?status=resolved", headers=auth_header(knowledge_admin_token)
+        )
         assert any(g["id"] == 1 for g in gap_resp.json())
 
 
 # tests/test_scheduler.py
 @pytest.mark.asyncio
 class TestScheduler:
-
     def test_mining_job_registered(self):
         # 测试 lifespan 启动后定时任务存在
         from app.infrastructure.scheduler import _scheduler
+
         jobs = _scheduler.get_jobs()
         assert any(j.id == "faq_mining_daily" for j in jobs)
 
     def test_mining_job_schedule(self):
         from app.infrastructure.scheduler import _scheduler
+
         job = _scheduler.get_job("faq_mining_daily")
         # 验证 next_run_time 在凌晨 02:00 之后
         next_run = job.next_run_time

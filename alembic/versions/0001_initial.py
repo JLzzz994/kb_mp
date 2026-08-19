@@ -27,7 +27,9 @@ def upgrade() -> None:
     op.create_table(
         "departments",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("parent_id", sa.Integer, nullable=True),  # FK → departments.id 自引用（循环，use_alter=True）
+        sa.Column(
+            "parent_id", sa.Integer, nullable=True
+        ),  # FK → departments.id 自引用（循环，use_alter=True）
         sa.Column("name", sa.String(64), nullable=False),
         sa.Column("leader_id", sa.Integer, nullable=True),  # FK → users.id（循环，use_alter=True）
         sa.Column("sort_order", sa.Integer, nullable=False, server_default="0"),
@@ -70,16 +72,28 @@ def upgrade() -> None:
     op.create_index("idx_department", "users", ["department_id"])
     # 循环 FK（部门 ↔ 用户）— users 表已存在，可安全添加
     op.create_foreign_key(
-        "fk_users_department_id", "users", "departments",
-        ["department_id"], ["id"], use_alter=True,
+        "fk_users_department_id",
+        "users",
+        "departments",
+        ["department_id"],
+        ["id"],
+        use_alter=True,
     )
     op.create_foreign_key(
-        "fk_departments_parent_id", "departments", "departments",
-        ["parent_id"], ["id"], use_alter=True,
+        "fk_departments_parent_id",
+        "departments",
+        "departments",
+        ["parent_id"],
+        ["id"],
+        use_alter=True,
     )
     op.create_foreign_key(
-        "fk_departments_leader_id", "departments", "users",
-        ["leader_id"], ["id"], use_alter=True,
+        "fk_departments_leader_id",
+        "departments",
+        "users",
+        ["leader_id"],
+        ["id"],
+        use_alter=True,
     )
 
     op.create_table(

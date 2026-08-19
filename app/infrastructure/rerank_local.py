@@ -36,16 +36,12 @@ class LocalBGERerank:
         try:
             from FlagEmbedding import FlagReranker
 
-            self._model = FlagReranker(
-                self._model_path, use_fp16=self._use_fp16
-            )
+            self._model = FlagReranker(self._model_path, use_fp16=self._use_fp16)
         except ImportError:
             try:
                 from sentence_transformers import CrossEncoder
 
-                self._model = CrossEncoder(
-                    self._model_path, device=self._device
-                )
+                self._model = CrossEncoder(self._model_path, device=self._device)
             except ImportError as exc:
                 raise RuntimeError(
                     "reranker requires FlagEmbedding or sentence-transformers"

@@ -32,8 +32,7 @@ def build_rerank() -> RerankPort | None:
     if backend == "local_bge":
         return LocalBGERerank()
     raise ValueError(
-        f"unknown rerank_backend: {settings.rerank_backend!r} "
-        f"(expected 'disabled' or 'local_bge')"
+        f"unknown rerank_backend: {settings.rerank_backend!r} (expected 'disabled' or 'local_bge')"
     )
 
 

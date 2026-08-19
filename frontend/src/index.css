@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* ---- shadcn 语义 token：深海权限台映射（rgb 三元组）---- */
+    --background: 245 248 251; /* Mist #F5F8FB */
+    --foreground: 23 43 58; /* Primary Text #172B3A */
+    --card: 255 255 255;
+    --card-foreground: 23 43 58;
+    --popover: 255 255 255;
+    --popover-foreground: 23 43 58;
+    --primary: 54 194 164; /* Authorization Teal #36C2A4 */
+    --primary-foreground: 9 41 35; /* 深青墨，保证 4.5:1 对比 */
+    --secondary: 220 230 237; /* Boundary #DCE6ED */
+    --secondary-foreground: 23 43 58;
+    --muted: 237 242 247;
+    --muted-foreground: 110 129 144; /* Secondary Text #6E8190 */
+    --accent: 230 247 242; /* Teal Soft #E6F7F2 */
+    --accent-foreground: 23 43 58;
+    --destructive: 214 83 83; /* Error Red #D65353 */
+    --destructive-foreground: 255 255 255;
+    --border: 220 230 237;
+    --input: 220 230 237;
+    --ring: 54 194 164;
+  }
+
+  html {
+    @apply text-[16px];
+  }
+
+  body {
+    @apply bg-mist text-primarytext font-body antialiased;
+    /* 背景纵深： Mist 底 + 极浅 Ink 对角氛围，避免纯白/纯灰平铺 */
+    background-image:
+      radial-gradient(1100px 480px at 85% -10%, rgba(24, 53, 77, 0.06), transparent 60%),
+      radial-gradient(900px 420px at -10% 110%, rgba(54, 194, 164, 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand/70 ring-offset-1 ring-offset-mist;
+  }
+}
+
+@layer components {
+  /* 权限脉冲线：召回 → 鉴权 → 回答 的状态流转（仅用于看板、权限配置与 AI 引用区域） */
+  .permission-pulse-line {
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      #18354d 0%,
+      #36c2a4 35%,
+      #f2a65a 70%,
+      #18354d 100%
+    );
+    background-size: 200% 100%;
+    animation: pulse-line 2.4s linear infinite;
+  }
+
+  .page-title {
+    @apply font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px];
+  }
+
+  .metric-number {
+    @apply font-display text-3xl font-extrabold tabular-nums tracking-tight;
+  }
+
+  .code-text {
+    @apply font-mono text-[13px] tracking-tight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .permission-pulse-line {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 细滚动条（侧栏 / 会话列表 / 引用面板） */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-boundary;
+}

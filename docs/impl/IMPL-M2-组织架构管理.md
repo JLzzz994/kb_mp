@@ -33,6 +33,7 @@ tests/
 ```python
 # app/domain/department.py
 """部门领域实体。"""
+
 from dataclasses import dataclass
 
 
@@ -58,10 +59,13 @@ class DepartmentRepository:
                 DepartmentRecord,
                 func.count(UserRecord.id).label("member_count"),
             )
-            .outerjoin(UserRecord, and_(
-                UserRecord.department_id == DepartmentRecord.id,
-                UserRecord.status == 1,
-            ))
+            .outerjoin(
+                UserRecord,
+                and_(
+                    UserRecord.department_id == DepartmentRecord.id,
+                    UserRecord.status == 1,
+                ),
+            )
             .group_by(DepartmentRecord.id)
         )
         result = await self._session.execute(stmt)
@@ -160,6 +164,7 @@ class DepartmentService:
             ns.sort(key=lambda n: (n.sort_order if hasattr(n, "sort_order") else 0, n.id))
             for n in ns:
                 sort_recursive(n.children)
+
         sort_recursive(roots)
 
         return roots
@@ -229,16 +234,12 @@ class DepartmentService:
         # 2. 子部门
         children_count = await self._repo.count_children(dept_id)
         if children_count > 0:
-            raise DepartmentNotEmptyError(
-                detail=f"部门下仍有 {children_count} 个子部门"
-            )
+            raise DepartmentNotEmptyError(detail=f"部门下仍有 {children_count} 个子部门")
 
         # 3. 成员
         member_count = await self._repo.count_members(dept_id)
         if member_count > 0:
-            raise DepartmentNotEmptyError(
-                detail=f"部门下仍有 {member_count} 名成员"
-            )
+            raise DepartmentNotEmptyError(detail=f"部门下仍有 {member_count} 名成员")
 
         # 4. 删除
         await self._repo.delete(dept_id)
@@ -258,6 +259,7 @@ class UserUpdate(BaseModel):
     - role_ids 传入则全量替换 user_roles（与 create 一致）
     - status 仅允许 0（停用）/ 1（启用）
     """
+
     display_name: str | None = Field(default=None, min_length=1, max_length=64)
     department_id: int | None = None
     role_ids: list[int] | None = None
@@ -279,8 +281,13 @@ class UserRepository:
         self._session = session
 
     async def list_paginated(
-        self, *, page: int, page_size: int,
-        department_id: int | None, status: int | None, keyword: str | None
+        self,
+        *,
+        page: int,
+        page_size: int,
+        department_id: int | None,
+        status: int | None,
+        keyword: str | None,
     ) -> tuple[list[tuple[UserRecord, str, list[str]]], int]:
         """分页查询用户（含部门名 + 角色码列表）。
 
@@ -294,7 +301,7 @@ class UserRepository:
         stmt = (
             select(UserRecord, DepartmentRecord.name)
             .join(DepartmentRecord, DepartmentRecord.id == UserRecord.department_id)
-            .where(UserRecord.status != -1)        # 不取已硬删除的
+            .where(UserRecord.status != -1)  # 不取已硬删除的
         )
 
         # 2. 筛选
@@ -303,10 +310,12 @@ class UserRepository:
         if status is not None:
             stmt = stmt.where(UserRecord.status == status)
         if keyword:
-            stmt = stmt.where(or_(
-                UserRecord.username.like(f"%{keyword}%"),
-                UserRecord.display_name.like(f"%{keyword}%"),
-            ))
+            stmt = stmt.where(
+                or_(
+                    UserRecord.username.like(f"%{keyword}%"),
+                    UserRecord.display_name.like(f"%{keyword}%"),
+                )
+            )
 
         # 3. 总数（独立 COUNT 查询）
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -374,7 +383,9 @@ class UserRepository:
 
 # app/services/user_service.py
 class UserService:
-    def __init__(self, user_repo: UserRepository, password_hasher: PasswordHasher, redis: RedisClient):
+    def __init__(
+        self, user_repo: UserRepository, password_hasher: PasswordHasher, redis: RedisClient
+    ):
         self._repo = user_repo
         self._hasher = password_hasher
         self._redis = redis
@@ -387,8 +398,11 @@ class UserService:
         2. 转 DTO
         """
         rows, total = await self._repo.list_paginated(
-            page=page, page_size=page_size,
-            department_id=department_id, status=status, keyword=keyword,
+            page=page,
+            page_size=page_size,
+            department_id=department_id,
+            status=status,
+            keyword=keyword,
         )
         items = [
             UserResponse(
@@ -447,7 +461,9 @@ class UserService:
         await self._repo.insert_user_roles(user.id, data.role_ids)
 
         # 6. 记录日志
-        logger.info("user.create user_id={} username={} roles={}", user.id, user.username, data.role_ids)
+        logger.info(
+            "user.create user_id={} username={} roles={}", user.id, user.username, data.role_ids
+        )
 
         # 7. 返回
         return await self.get(user.id)
@@ -539,11 +555,13 @@ class RoleRepository:
         )
         # 2. 批量插入
         for code in codes:
-            self._session.add(RolePermissionRecord(
-                role_id=role_id,
-                permission_code=code,
-                permission_type="menu",
-            ))
+            self._session.add(
+                RolePermissionRecord(
+                    role_id=role_id,
+                    permission_code=code,
+                    permission_type="menu",
+                )
+            )
         await self._session.flush()
 
     async def find_by_code(self, code: str) -> RoleRecord | None:
@@ -604,7 +622,9 @@ class RoleService:
         # 6. 日志
         logger.warn(
             "role.permissions_change role_id={} codes={} affected_users={}",
-            role_id, codes, len(affected_user_ids),
+            role_id,
+            codes,
+            len(affected_user_ids),
         )
 
     async def list_all_permission_codes(self) -> list[str]:
@@ -621,32 +641,48 @@ class RoleService:
 router = APIRouter(prefix="/api/v1/org", tags=["org"])
 
 
-@router.get("/departments", response_model=list[DepartmentNode],
-            dependencies=[Depends(require_permission("dept:read"))])
+@router.get(
+    "/departments",
+    response_model=list[DepartmentNode],
+    dependencies=[Depends(require_permission("dept:read"))],
+)
 async def list_departments(service: DepartmentServiceDep):
     return await service.list_tree()
 
 
-@router.post("/departments", response_model=DepartmentNode, status_code=201,
-             dependencies=[Depends(require_permission("dept:write"))])
+@router.post(
+    "/departments",
+    response_model=DepartmentNode,
+    status_code=201,
+    dependencies=[Depends(require_permission("dept:write"))],
+)
 async def create_department(data: DepartmentCreate, service: DepartmentServiceDep):
     return await service.create(data)
 
 
-@router.put("/departments/{dept_id}", response_model=DepartmentNode,
-            dependencies=[Depends(require_permission("dept:write"))])
+@router.put(
+    "/departments/{dept_id}",
+    response_model=DepartmentNode,
+    dependencies=[Depends(require_permission("dept:write"))],
+)
 async def update_department(dept_id: int, data: DepartmentUpdate, service: DepartmentServiceDep):
     return await service.update(dept_id, data)
 
 
-@router.delete("/departments/{dept_id}", status_code=204,
-               dependencies=[Depends(require_permission("dept:write"))])
+@router.delete(
+    "/departments/{dept_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("dept:write"))],
+)
 async def delete_department(dept_id: int, service: DepartmentServiceDep):
     await service.delete(dept_id)
 
 
-@router.get("/users", response_model=UserListResponse,
-            dependencies=[Depends(require_permission("user:read"))])
+@router.get(
+    "/users",
+    response_model=UserListResponse,
+    dependencies=[Depends(require_permission("user:read"))],
+)
 async def list_users(
     service: UserServiceDep,
     page: int = Query(1, ge=1),
@@ -656,26 +692,39 @@ async def list_users(
     keyword: str | None = None,
 ):
     return await service.list(
-        page=page, page_size=page_size,
-        department_id=department_id, status=status, keyword=keyword,
+        page=page,
+        page_size=page_size,
+        department_id=department_id,
+        status=status,
+        keyword=keyword,
     )
 
 
-@router.post("/users", response_model=UserResponse, status_code=201,
-             dependencies=[Depends(require_permission("user:write"))])
+@router.post(
+    "/users",
+    response_model=UserResponse,
+    status_code=201,
+    dependencies=[Depends(require_permission("user:write"))],
+)
 async def create_user(data: UserCreate, service: UserServiceDep):
     return await service.create(data)
 
 
-@router.get("/users/{user_id}", response_model=UserResponse,
-            dependencies=[Depends(require_permission("user:read"))])
+@router.get(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(require_permission("user:read"))],
+)
 async def get_user(user_id: int, service: UserServiceDep):
     """获取单个用户详情（含部门名 + 角色码列表）。"""
     return await service.get(user_id)
 
 
-@router.put("/users/{user_id}", response_model=UserResponse,
-            dependencies=[Depends(require_permission("user:write"))])
+@router.put(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(require_permission("user:write"))],
+)
 async def update_user(
     user_id: int,
     data: UserUpdate,
@@ -685,32 +734,49 @@ async def update_user(
     return await service.update(user_id, data)
 
 
-@router.patch("/users/{user_id}/status", status_code=204,
-               dependencies=[Depends(require_permission("user:write"))])
+@router.patch(
+    "/users/{user_id}/status",
+    status_code=204,
+    dependencies=[Depends(require_permission("user:write"))],
+)
 async def set_user_status(user_id: int, data: UserStatusPatch, service: UserServiceDep):
     await service.set_status(user_id, data.status)
 
 
-@router.post("/users/{user_id}/reset-password", status_code=204,
-             dependencies=[Depends(require_permission("user:write"))])
+@router.post(
+    "/users/{user_id}/reset-password",
+    status_code=204,
+    dependencies=[Depends(require_permission("user:write"))],
+)
 async def reset_password(user_id: int, data: ResetPasswordRequest, service: UserServiceDep):
     await service.reset_password(user_id, data.new_password)
 
 
-@router.get("/roles", response_model=list[RoleResponse],
-            dependencies=[Depends(require_permission("role:read"))])
+@router.get(
+    "/roles",
+    response_model=list[RoleResponse],
+    dependencies=[Depends(require_permission("role:read"))],
+)
 async def list_roles(service: RoleServiceDep):
     return await service.list()
 
 
-@router.post("/roles/{role_id}/permissions", status_code=204,
-             dependencies=[Depends(require_permission("role:write"))])
-async def assign_role_permissions(role_id: int, data: AssignPermissionsRequest, service: RoleServiceDep):
+@router.post(
+    "/roles/{role_id}/permissions",
+    status_code=204,
+    dependencies=[Depends(require_permission("role:write"))],
+)
+async def assign_role_permissions(
+    role_id: int, data: AssignPermissionsRequest, service: RoleServiceDep
+):
     await service.assign_permissions(role_id, data.permission_codes)
 
 
-@router.get("/permissions", response_model=list[str],
-            dependencies=[Depends(require_permission("role:read"))])
+@router.get(
+    "/permissions",
+    response_model=list[str],
+    dependencies=[Depends(require_permission("role:read"))],
+)
 async def list_permission_codes(service: RoleServiceDep):
     return await service.list_all_permission_codes()
 ```
@@ -723,8 +789,9 @@ async def list_permission_codes(service: RoleServiceDep):
 # tests/test_org_departments.py
 @pytest.mark.asyncio
 class TestDepartments:
-
-    async def test_list_departments_returns_tree(self, async_client, admin_token, seeded_departments):
+    async def test_list_departments_returns_tree(
+        self, async_client, admin_token, seeded_departments
+    ):
         resp = await async_client.get("/api/v1/org/departments", headers=auth_header(admin_token))
         assert resp.status_code == 200
         body = resp.json()
@@ -732,12 +799,18 @@ class TestDepartments:
         assert len(body) == 1
         assert len(body[0]["children"]) >= 2
 
-    async def test_create_department_with_invalid_parent_returns_404(self, async_client, admin_token):
+    async def test_create_department_with_invalid_parent_returns_404(
+        self, async_client, admin_token
+    ):
         req = {"name": "新部门", "parent_id": 9999}
-        resp = await async_client.post("/api/v1/org/departments", json=req, headers=auth_header(admin_token))
+        resp = await async_client.post(
+            "/api/v1/org/departments", json=req, headers=auth_header(admin_token)
+        )
         assert resp.status_code == 404
 
-    async def test_delete_dept_with_children_returns_422(self, async_client, admin_token, seeded_departments):
+    async def test_delete_dept_with_children_returns_422(
+        self, async_client, admin_token, seeded_departments
+    ):
         # 尝试删除有子部门的根
         resp = await async_client.delete(
             "/api/v1/org/departments/1",
@@ -746,7 +819,9 @@ class TestDepartments:
         assert resp.status_code == 422
         assert resp.json()["error_code"] == "department_not_empty"
 
-    async def test_delete_dept_with_members_returns_422(self, async_client, admin_token, seeded_admin_in_dept):
+    async def test_delete_dept_with_members_returns_422(
+        self, async_client, admin_token, seeded_admin_in_dept
+    ):
         resp = await async_client.delete(
             "/api/v1/org/departments/1",
             headers=auth_header(admin_token),
@@ -755,14 +830,15 @@ class TestDepartments:
 
     async def test_regular_user_cannot_create_dept(self, async_client, regular_user_token):
         req = {"name": "hack", "parent_id": None}
-        resp = await async_client.post("/api/v1/org/departments", json=req, headers=auth_header(regular_user_token))
+        resp = await async_client.post(
+            "/api/v1/org/departments", json=req, headers=auth_header(regular_user_token)
+        )
         assert resp.status_code == 403
 
 
 # tests/test_org_users.py
 @pytest.mark.asyncio
 class TestUsers:
-
     async def test_create_user_hashes_password(self, async_client, admin_token, db_session):
         req = {
             "username": "newbie",
@@ -771,18 +847,28 @@ class TestUsers:
             "department_id": 1,
             "role_ids": [3],
         }
-        resp = await async_client.post("/api/v1/org/users", json=req, headers=auth_header(admin_token))
+        resp = await async_client.post(
+            "/api/v1/org/users", json=req, headers=auth_header(admin_token)
+        )
         assert resp.status_code == 201
 
         # 验证密码已哈希
         record = await db_session.execute(select(UserRecord).where(UserRecord.username == "newbie"))
         user = record.scalar_one()
         assert user.password_hash != "Init@1234"
-        assert user.password_hash.startswith("$2b$")     # bcrypt 标识
+        assert user.password_hash.startswith("$2b$")  # bcrypt 标识
 
     async def test_create_user_duplicate_username_returns_409(self, async_client, admin_token):
-        req = {"username": "admin", "password": "Another@1234", "display_name": "x", "department_id": 1, "role_ids": [3]}
-        resp = await async_client.post("/api/v1/org/users", json=req, headers=auth_header(admin_token))
+        req = {
+            "username": "admin",
+            "password": "Another@1234",
+            "display_name": "x",
+            "department_id": 1,
+            "role_ids": [3],
+        }
+        resp = await async_client.post(
+            "/api/v1/org/users", json=req, headers=auth_header(admin_token)
+        )
         assert resp.status_code == 409
         assert resp.json()["error_code"] == "username_conflict"
 
@@ -798,7 +884,9 @@ class TestUsers:
         assert body["total"] == 5
         assert len(body["items"]) == 2
 
-    async def test_reset_password_clears_redis_bitmap(self, async_client, admin_token, redis_client):
+    async def test_reset_password_clears_redis_bitmap(
+        self, async_client, admin_token, redis_client
+    ):
         # 模拟位图已存在
         await redis_client.set("auth:bitmap:2", "[]", ex=300)
         resp = await async_client.post(
@@ -823,8 +911,9 @@ class TestUsers:
 # tests/test_org_roles.py
 @pytest.mark.asyncio
 class TestRoles:
-
-    async def test_assign_permissions_clears_user_bitmaps(self, async_client, admin_token, redis_client, seeded_users):
+    async def test_assign_permissions_clears_user_bitmaps(
+        self, async_client, admin_token, redis_client, seeded_users
+    ):
         # 给 user 2 和 user 3 设置位图
         await redis_client.set("auth:bitmap:2", '["knowledge:read"]', ex=300)
         await redis_client.set("auth:bitmap:3", '["ai:chat"]', ex=300)
@@ -849,7 +938,9 @@ class TestRoles:
         )
         assert resp.status_code == 422
 
-    async def test_list_roles_includes_system_admin_with_all_perms(self, async_client, admin_token, seeded_data):
+    async def test_list_roles_includes_system_admin_with_all_perms(
+        self, async_client, admin_token, seeded_data
+    ):
         resp = await async_client.get("/api/v1/org/roles", headers=auth_header(admin_token))
         body = resp.json()
         sys_admin = next(r for r in body if r["role_code"] == "system_admin")

@@ -46,6 +46,7 @@ tests/
 ```python
 # app/infrastructure/parsers/base_parser.py
 """解析器基类。"""
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -59,6 +60,7 @@ class BaseParser(ABC):
 
 class ParseError(Exception):
     """解析失败的统一异常。"""
+
     def __init__(self, message: str, file_path: Path):
         super().__init__(message)
         self.file_path = file_path
@@ -165,6 +167,7 @@ class MarkdownParser(BaseParser):
         raw = path.read_text(encoding="utf-8")
         # 移除 HTML 标签
         import re
+
         return re.sub(r"<[^>]+>", "", raw)
 
 
@@ -185,6 +188,7 @@ class UnsupportedFormatError(Exception):
 
 class ParserFactory:
     """按扩展名路由解析器。"""
+
     SUPPORTED_EXTENSIONS = {"pdf", "md", "docx", "txt"}
 
     def __init__(self):
@@ -227,6 +231,7 @@ def get_parser_factory() -> ParserFactory:
 
 使用 LangChain OpenAIEmbeddings 简化 SDK 调用；统一异步 embed / embed_batch 接口。
 """
+
 from langchain_openai import OpenAIEmbeddings
 
 
@@ -264,6 +269,7 @@ class EmbeddingService:
 ```python
 # app/infrastructure/splitter.py
 """文本切片：保护块占位符 + RecursiveCharacterTextSplitter。"""
+
 import re
 import uuid
 from dataclasses import dataclass
@@ -274,7 +280,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 @dataclass(slots=True)
 class Chunk:
     text: str
-    index: int         # 在原文档中的顺序
+    index: int  # 在原文档中的顺序
 
 
 class Splitter:
@@ -286,6 +292,7 @@ class Splitter:
     3. refine_chunks：超长用 RecursiveCharacterTextSplitter 细切 + 短块合并
     4. 从后往前 replace 回原占位符内容
     """
+
     CHUNK_MAX_SIZE = 1000
     CHUNK_SIZE = 600
     CHUNK_OVERLAP = 100
@@ -391,6 +398,7 @@ class Splitter:
 
 使用 LangChain OpenAIEmbeddings 简化 SDK 调用；统一异步 embed / embed_batch 接口。
 """
+
 from langchain_openai import OpenAIEmbeddings
 
 
@@ -426,6 +434,7 @@ class EmbeddingService:
 ```python
 # app/services/knowledge_import_service.py
 """知识导入：单/批量文件解析 → 切片 → 入库 → 触发向量化。"""
+
 import hashlib
 import uuid
 from dataclasses import dataclass
@@ -455,8 +464,8 @@ class ImportRejected:
 
 
 class KnowledgeImportService:
-    MAX_SINGLE_BYTES = 20 * 1024 * 1024      # 20MB
-    MAX_TOTAL_BYTES = 200 * 1024 * 1024       # 200MB
+    MAX_SINGLE_BYTES = 20 * 1024 * 1024  # 20MB
+    MAX_TOTAL_BYTES = 200 * 1024 * 1024  # 200MB
 
     def __init__(
         self,
@@ -465,7 +474,7 @@ class KnowledgeImportService:
         splitter: Splitter,
         file_storage: FileStorage,
         milvus: MilvusGateway,
-        embedding: EmbeddingService,           # C2 修复
+        embedding: EmbeddingService,  # C2 修复
     ):
         self._unit_repo = unit_repo
         self._parser = parser_factory
@@ -496,7 +505,7 @@ class KnowledgeImportService:
         # 1. 校验
         total_bytes = sum(f.size or 0 for f in files)
         if total_bytes > self.MAX_TOTAL_BYTES:
-            raise FileSizeExceededError(detail=f"总大小 {total_bytes//1024//1024}MB 超过 200MB")
+            raise FileSizeExceededError(detail=f"总大小 {total_bytes // 1024 // 1024}MB 超过 200MB")
         for f in files:
             if (f.size or 0) > self.MAX_SINGLE_BYTES:
                 raise FileSizeExceededError(
@@ -511,10 +520,12 @@ class KnowledgeImportService:
                 # 2a. 落盘
                 ext = Path(upload.filename).suffix.lstrip(".").lower()
                 if ext not in ParserFactory.SUPPORTED_EXTENSIONS:
-                    rejected.append(ImportRejected(
-                        file_name=upload.filename,
-                        reason="unsupported_format",
-                    ))
+                    rejected.append(
+                        ImportRejected(
+                            file_name=upload.filename,
+                            reason="unsupported_format",
+                        )
+                    )
                     continue
                 saved_path = await self._storage.save(upload, ext=ext)
 
@@ -522,10 +533,12 @@ class KnowledgeImportService:
                 content_hash = await self._storage.compute_sha256(saved_path)
                 existing = await self._unit_repo.find_by_content_hash(content_hash)
                 if existing is not None:
-                    rejected.append(ImportRejected(
-                        file_name=upload.filename,
-                        reason="duplicate_content",
-                    ))
+                    rejected.append(
+                        ImportRejected(
+                            file_name=upload.filename,
+                            reason="duplicate_content",
+                        )
+                    )
                     # 删除已落盘（拒绝重复）
                     saved_path.unlink(missing_ok=True)
                     continue
@@ -534,11 +547,15 @@ class KnowledgeImportService:
                 try:
                     raw_text = self._parser.parse(saved_path)
                 except (ParseError, UnsupportedFormatError) as exc:
-                    logger.warning("knowledge.parse.fail filename={} error={}", upload.filename, exc)
-                    rejected.append(ImportRejected(
-                        file_name=upload.filename,
-                        reason="parse_failed",
-                    ))
+                    logger.warning(
+                        "knowledge.parse.fail filename={} error={}", upload.filename, exc
+                    )
+                    rejected.append(
+                        ImportRejected(
+                            file_name=upload.filename,
+                            reason="parse_failed",
+                        )
+                    )
                     continue
 
                 # 2d. 切片
@@ -550,7 +567,7 @@ class KnowledgeImportService:
                 unit_records = [
                     KnowledgeUnitRecord(
                         unit_code=code,
-                        title=f"{title} #{i+1}",
+                        title=f"{title} #{i + 1}",
                         content=chunk.text,
                         summary=chunk.text[:200],
                         source_file_name=upload.filename,
@@ -571,18 +588,22 @@ class KnowledgeImportService:
                     chunks=chunks,
                 )
 
-                accepted.append(ImportAccepted(
-                    file_name=upload.filename,
-                    unit_codes=unit_codes,
-                ))
+                accepted.append(
+                    ImportAccepted(
+                        file_name=upload.filename,
+                        unit_codes=unit_codes,
+                    )
+                )
                 logger.info("knowledge.import file={} units={}", upload.filename, len(unit_codes))
 
             except Exception as exc:
                 logger.error("knowledge.import.fail file={} error={}", upload.filename, exc)
-                rejected.append(ImportRejected(
-                    file_name=upload.filename,
-                    reason="internal_error",
-                ))
+                rejected.append(
+                    ImportRejected(
+                        file_name=upload.filename,
+                        reason="internal_error",
+                    )
+                )
 
         return accepted, rejected
 
@@ -609,13 +630,15 @@ class KnowledgeImportService:
         except Exception as exc:
             logger.warning(
                 "knowledge.vectorize.fail unit_ids={} error={}",
-                unit_ids, exc,
+                unit_ids,
+                exc,
             )
             # 失败时保持 status='vector_pending'，后台重试
 
     def _generate_unit_code(self, index: int) -> str:
         """生成业务编号：KU-YYYYMM-NNNNNN。"""
         from datetime import datetime
+
         ym = datetime.now().strftime("%Y%m")
         # 演示期简化：用 uuid 后 6 位
         return f"KU-{ym}-{uuid.uuid4().hex[:6].upper()}"
@@ -624,6 +647,7 @@ class KnowledgeImportService:
 ```python
 # app/infrastructure/file_storage.py
 """本地文件存储。"""
+
 import hashlib
 import shutil
 from pathlib import Path
@@ -658,6 +682,7 @@ class FileStorage:
 ```python
 # app/repositories/knowledge_unit_repository.py
 """知识单元 ORM 仓储：knowledge_units 表 + unit_permissions 关联表。"""
+
 from datetime import datetime
 
 from sqlalchemy import select
@@ -686,17 +711,20 @@ class KnowledgeUnitRepository:
     async def batch_insert(self, records: list[KnowledgeUnitRecord]) -> list[int]: ...
     async def batch_delete(self, ids: list[int]) -> int: ...
     async def list_paginated(
-        self, *, page: int, page_size: int, keyword: str | None,
-        category: str | None, status: str | None,
+        self,
+        *,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        category: str | None,
+        status: str | None,
     ) -> tuple[list[KnowledgeUnitRecord], int]: ...
     async def update_status_batch(self, ids: list[int], status: str) -> None: ...
 
     # ----- 单字段查询（M6 FAQ 缓存版本校验 + M4 组装） -----
     async def get_updated_at(self, unit_id: int) -> datetime | None:
         """返回 knowledge_units.updated_at（FAQ 缓存版本校验用）。"""
-        stmt = select(KnowledgeUnitRecord.updated_at).where(
-            KnowledgeUnitRecord.id == unit_id
-        )
+        stmt = select(KnowledgeUnitRecord.updated_at).where(KnowledgeUnitRecord.id == unit_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_status(self, unit_id: int) -> str | None:
@@ -721,9 +749,7 @@ class KnowledgeUnitRepository:
         """M4 permission_filter 用：批量取 unit_id → UnitPermissionRecord。"""
         if not unit_ids:
             return []
-        stmt = select(UnitPermissionRecord).where(
-            UnitPermissionRecord.unit_id.in_(unit_ids)
-        )
+        stmt = select(UnitPermissionRecord).where(UnitPermissionRecord.unit_id.in_(unit_ids))
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_permissions_for_unit(self, unit_id: int) -> list[UnitPermissionRecord]: ...
@@ -738,9 +764,7 @@ class KnowledgeUnitRepository:
         self, target_type: str, target_ids: list[int]
     ) -> list[int]: ...
     async def load_current_user(self, user_id: int) -> CurrentUser | None: ...
-    async def list_permissions_summary_for_units(
-        self, unit_ids: list[int]
-    ) -> dict[int, str]: ...
+    async def list_permissions_summary_for_units(self, unit_ids: list[int]) -> dict[int, str]: ...
 
     # ----- target 校验用 -----
     async def find_department(self, dept_id: int) -> DepartmentRecord | None: ...
@@ -788,8 +812,8 @@ class KnowledgeUnitService:
         repo: KnowledgeUnitRepository,
         milvus: MilvusGateway,
         redis: RedisClient,
-        faq_cache: FaqCacheService,         # C1 修复：缺注入，batch_delete 时失效 FAQ 缓存
-        embedding: EmbeddingService,       # C2 修复
+        faq_cache: FaqCacheService,  # C1 修复：缺注入，batch_delete 时失效 FAQ 缓存
+        embedding: EmbeddingService,  # C2 修复
     ):
         self._repo = repo
         self._milvus = milvus
@@ -805,22 +829,30 @@ class KnowledgeUnitService:
         2. 批量 enrich：permissions_summary（"全局公开" / "研发部+管理员"）
         """
         rows, total = await self._repo.list_paginated(
-            page=page, page_size=page_size,
-            keyword=keyword, category=category, status=status,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            category=category,
+            status=status,
         )
         # enrich permissions_summary
         unit_ids = [r.id for r in rows]
         perm_map = await self._repo.list_permissions_summary_for_units(unit_ids)
         items = [
             KnowledgeUnitResponse(
-                id=r.id, unit_code=r.unit_code, title=r.title,
-                summary=r.summary, category=r.category,
-                file_type=r.file_type, source_file_name=r.source_file_name,
+                id=r.id,
+                unit_code=r.unit_code,
+                title=r.title,
+                summary=r.summary,
+                category=r.category,
+                file_type=r.file_type,
+                source_file_name=r.source_file_name,
                 permissions_summary=perm_map.get(r.id, "未配置"),
                 creator_id=r.creator_id,
                 creator_name=r.creator.display_name if r.creator else "",
                 status=r.status,
-                created_at=r.created_at, updated_at=r.updated_at,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
             )
             for r in rows
         ]
@@ -847,18 +879,25 @@ class KnowledgeUnitService:
         ]
 
         return KnowledgeUnitDetailResponse(
-            id=record.id, unit_code=record.unit_code, title=record.title,
-            content=record.content, summary=record.summary,
-            category=record.category, file_type=record.file_type,
+            id=record.id,
+            unit_code=record.unit_code,
+            title=record.title,
+            content=record.content,
+            summary=record.summary,
+            category=record.category,
+            file_type=record.file_type,
             source_file_name=record.source_file_name,
             permissions=perm_entries,
             creator_id=record.creator_id,
             creator_name=record.creator.display_name if record.creator else "",
             status=record.status,
-            created_at=record.created_at, updated_at=record.updated_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
         )
 
-    async def patch(self, unit_id: int, data: KnowledgeUnitPatch, user: CurrentUser) -> KnowledgeUnitResponse:
+    async def patch(
+        self, unit_id: int, data: KnowledgeUnitPatch, user: CurrentUser
+    ) -> KnowledgeUnitResponse:
         """部分更新。
 
         步骤：
@@ -921,7 +960,9 @@ class KnowledgeUnitService:
         await self._milvus.delete(ids)
         # 3. 失效相关 FAQ 缓存（任何挂载 unit_id 的 FAQ）
         await self._faq_cache.invalidate_by_unit_ids(ids)
-        logger.info("knowledge.unit.batch_delete actor={} ids={} count={}", user.id, ids, deleted_count)
+        logger.info(
+            "knowledge.unit.batch_delete actor={} ids={} count={}", user.id, ids, deleted_count
+        )
         return deleted_count
 
     async def create(
@@ -944,9 +985,7 @@ class KnowledgeUnitService:
         if not data.content or not data.content.strip():
             raise ValidationError("content_empty")
 
-        content_hash = __import__("hashlib").sha256(
-            data.content.encode("utf-8")
-        ).hexdigest()
+        content_hash = __import__("hashlib").sha256(data.content.encode("utf-8")).hexdigest()
 
         # 2. 幂等检查
         existing = await self._repo.find_by_content_hash(content_hash)
@@ -990,6 +1029,7 @@ class KnowledgeUnitService:
     def _generate_unit_code(self) -> str:
         """生成业务编号：KU-YYYYMM-NNNNNN。"""
         from datetime import datetime
+
         ym = datetime.now().strftime("%Y%m")
         return f"KU-{ym}-{uuid.uuid4().hex[:6].upper()}"
 ```
@@ -1001,6 +1041,7 @@ class KnowledgeUnitService:
 ```python
 # app/services/knowledge_permission_service.py
 """数据权限服务：鉴权算法 + check-permissions 共享接口。"""
+
 from app.domain.user import CurrentUser
 
 
@@ -1009,7 +1050,9 @@ class KnowledgePermissionService:
         self._repo = unit_repo
         self._redis = redis
 
-    async def configure(self, unit_id: int, req: ConfigurePermissionsRequest, user: CurrentUser) -> list[PermissionEntryResponse]:
+    async def configure(
+        self, unit_id: int, req: ConfigurePermissionsRequest, user: CurrentUser
+    ) -> list[PermissionEntryResponse]:
         """全量替换知识单元的数据权限。
 
         步骤：
@@ -1041,7 +1084,12 @@ class KnowledgePermissionService:
         await self._repo.replace_permissions(unit_id, req.permissions)
 
         # 6. 返回
-        logger.info("unit.permission_config unit_id={} actor={} counts={}", unit_id, user.id, len(req.permissions))
+        logger.info(
+            "unit.permission_config unit_id={} actor={} counts={}",
+            unit_id,
+            user.id,
+            len(req.permissions),
+        )
         return await self._build_response(unit_id)
 
     async def _validate_target(self, p: PermissionEntryRequest) -> None:
@@ -1101,7 +1149,9 @@ class KnowledgePermissionService:
 
         return bitmap
 
-    async def check_permissions(self, user_id: int, unit_ids: list[int]) -> CheckPermissionsResponse:
+    async def check_permissions(
+        self, user_id: int, unit_ids: list[int]
+    ) -> CheckPermissionsResponse:
         """M3 共享接口：拆分为 authorized / unauthorized。
 
         步骤：
@@ -1175,8 +1225,11 @@ class KnowledgePermissionService:
 router = APIRouter(prefix="/api/v1", tags=["knowledge"])
 
 
-@router.post("/knowledge/import", response_model=ImportTaskResponse,
-             dependencies=[Depends(require_permission("knowledge:write"))])
+@router.post(
+    "/knowledge/import",
+    response_model=ImportTaskResponse,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
 async def import_knowledge(
     bg: BackgroundTasks,
     user: CurrentUserDep,
@@ -1194,8 +1247,11 @@ async def import_knowledge(
     )
 
 
-@router.get("/knowledge-units", response_model=UnitListResponse,
-            dependencies=[Depends(require_permission("knowledge:read"))])
+@router.get(
+    "/knowledge-units",
+    response_model=UnitListResponse,
+    dependencies=[Depends(require_permission("knowledge:read"))],
+)
 async def list_units(
     service: KnowledgeUnitServiceDep,
     user: CurrentUserDep,
@@ -1206,31 +1262,51 @@ async def list_units(
     status: str | None = None,
 ):
     return await service.list(
-        page=page, page_size=page_size,
-        keyword=keyword, category=category, status=status, user=user,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        category=category,
+        status=status,
+        user=user,
     )
 
 
-@router.get("/knowledge-units/{unit_id}", response_model=KnowledgeUnitDetailResponse,
-            dependencies=[Depends(require_permission("knowledge:read"))])
+@router.get(
+    "/knowledge-units/{unit_id}",
+    response_model=KnowledgeUnitDetailResponse,
+    dependencies=[Depends(require_permission("knowledge:read"))],
+)
 async def get_unit(unit_id: int, service: KnowledgeUnitServiceDep, user: CurrentUserDep):
     return await service.get(unit_id, user)
 
 
-@router.patch("/knowledge-units/{unit_id}", response_model=KnowledgeUnitResponse,
-              dependencies=[Depends(require_permission("knowledge:write"))])
-async def patch_unit(unit_id: int, data: KnowledgeUnitPatch, service: KnowledgeUnitServiceDep, user: CurrentUserDep):
+@router.patch(
+    "/knowledge-units/{unit_id}",
+    response_model=KnowledgeUnitResponse,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
+async def patch_unit(
+    unit_id: int, data: KnowledgeUnitPatch, service: KnowledgeUnitServiceDep, user: CurrentUserDep
+):
     return await service.patch(unit_id, data, user)
 
 
-@router.delete("/knowledge-units", status_code=204,
-               dependencies=[Depends(require_permission("knowledge:delete"))])
-async def batch_delete_units(req: BatchDeleteRequest, service: KnowledgeUnitServiceDep, user: CurrentUserDep):
+@router.delete(
+    "/knowledge-units",
+    status_code=204,
+    dependencies=[Depends(require_permission("knowledge:delete"))],
+)
+async def batch_delete_units(
+    req: BatchDeleteRequest, service: KnowledgeUnitServiceDep, user: CurrentUserDep
+):
     await service.batch_delete(req.ids, user)
 
 
-@router.post("/knowledge-units/{unit_id}/permissions", response_model=list[PermissionEntryResponse],
-             dependencies=[Depends(require_permission("knowledge:assign_permission"))])
+@router.post(
+    "/knowledge-units/{unit_id}/permissions",
+    response_model=list[PermissionEntryResponse],
+    dependencies=[Depends(require_permission("knowledge:assign_permission"))],
+)
 async def configure_permissions(
     unit_id: int,
     req: ConfigurePermissionsRequest,
@@ -1245,8 +1321,11 @@ async def configure_permissions(
     return await service.configure(unit_id, req, user)
 
 
-@router.post("/knowledge/check-permissions", response_model=CheckPermissionsResponse,
-             dependencies=[Depends(require_permission("knowledge:check"))])
+@router.post(
+    "/knowledge/check-permissions",
+    response_model=CheckPermissionsResponse,
+    dependencies=[Depends(require_permission("knowledge:check"))],
+)
 async def check_permissions(
     req: CheckPermissionsRequest,
     service: KnowledgePermissionServiceDep,
@@ -1266,11 +1345,13 @@ async def check_permissions(
 ```python
 # app/api/schemas/knowledge_unit_schema.py
 """知识单元 CRUD / 权限配置 Request/Response 模型。"""
+
 from pydantic import BaseModel, Field
 
 
 class KnowledgeUnitCreate(BaseModel):
     """手动新建单元请求体（被 M6 一键建档复用）。"""
+
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     summary: str | None = Field(default=None, max_length=512)
@@ -1282,6 +1363,7 @@ class KnowledgeUnitCreate(BaseModel):
 
 class KnowledgeUnitPatch(BaseModel):
     """PATCH /api/v1/knowledge-units/{unit_id} 部分更新请求体。"""
+
     title: str | None = Field(default=None, min_length=1, max_length=255)
     content: str | None = Field(default=None, min_length=1)
     summary: str | None = Field(default=None, max_length=512)
@@ -1290,6 +1372,7 @@ class KnowledgeUnitPatch(BaseModel):
 
 class KnowledgeUnitResponse(BaseModel):
     """单元列表/详情通用响应。"""
+
     id: int
     unit_code: str
     title: str
@@ -1307,6 +1390,7 @@ class KnowledgeUnitResponse(BaseModel):
 
 class KnowledgeUnitDetailResponse(KnowledgeUnitResponse):
     """详情：附加 content + permissions 列表。"""
+
     content: str
     permissions: list["PermissionEntryResponse"]
 
@@ -1344,17 +1428,16 @@ class CheckPermissionsResponse(BaseModel):
 # tests/test_parser_factory.py
 @pytest.mark.asyncio
 class TestParserFactory:
-
     async def test_pdf_parser_extracts_text(self, parser_factory, tmp_path):
         # 构造简单 PDF（用 reportlab 跳过，直接放 fixture）
         pdf = tmp_path / "sample.pdf"
         pdf.write_bytes(SAMPLE_PDF_BYTES)
         text = parser_factory.parse(pdf)
-        assert "Hello" in text     # 来自 fixture 的内容
+        assert "Hello" in text  # 来自 fixture 的内容
 
     async def test_txt_parser_utf8_fallback_gbk(self, parser_factory, tmp_path):
         txt = tmp_path / "win.txt"
-        txt.write_bytes("你好世界".encode("gbk"))     # GBK 编码
+        txt.write_bytes("你好世界".encode("gbk"))  # GBK 编码
         text = parser_factory.parse(txt)
         assert text == "你好世界"
 
@@ -1368,14 +1451,13 @@ class TestParserFactory:
 # tests/test_splitter.py
 @pytest.mark.asyncio
 class TestSplitter:
-
     async def test_short_text_single_chunk(self, splitter):
         text = "短文本不超过 600 字" * 10
         chunks = splitter.split(text, title="t")
         assert len(chunks) == 1
 
     async def test_long_text_multiple_chunks(self, splitter):
-        text = "段落。\n\n" * 500        # 约 4000 字
+        text = "段落。\n\n" * 500  # 约 4000 字
         chunks = splitter.split(text, title="t")
         assert len(chunks) > 1
         # 检查重叠窗口
@@ -1395,7 +1477,6 @@ class TestSplitter:
 # tests/test_knowledge_import.py
 @pytest.mark.asyncio
 class TestImport:
-
     async def test_import_pdf_creates_units(self, async_client, admin_token, seeded_import):
         files = [("files", ("test.pdf", SAMPLE_PDF_BYTES, "application/pdf"))]
         resp = await async_client.post(
@@ -1433,7 +1514,6 @@ class TestImport:
 # tests/test_knowledge_permission.py
 @pytest.mark.asyncio
 class TestPermission:
-
     async def test_configure_global_permission(self, async_client, admin_token, seeded_unit):
         resp = await async_client.post(
             "/api/v1/knowledge-units/1/permissions",
@@ -1445,10 +1525,12 @@ class TestPermission:
     async def test_configure_multiple_global_returns_422(self, async_client, admin_token):
         resp = await async_client.post(
             "/api/v1/knowledge-units/1/permissions",
-            json={"permissions": [
-                {"target_type": "global", "target_id": None},
-                {"target_type": "global", "target_id": None},
-            ]},
+            json={
+                "permissions": [
+                    {"target_type": "global", "target_id": None},
+                    {"target_type": "global", "target_id": None},
+                ]
+            },
             headers=auth_header(admin_token),
         )
         assert resp.status_code == 422
@@ -1468,7 +1550,9 @@ class TestPermission:
         assert set(body["authorized_unit_ids"]) & set(body["unauthorized_unit_ids"]) == set()
 
     async def test_check_permissions_requires_perm(
-        self, async_client, regular_user_token,
+        self,
+        async_client,
+        regular_user_token,
     ):
         """普通用户（无 knowledge:check）调用 check-permissions 返回 403 permission_denied。"""
         req = {"user_id": 1, "unit_ids": [1, 2]}
@@ -1483,19 +1567,21 @@ class TestPermission:
     def test_compute_user_bitmap_or_logic(self):
         # 纯函数单测
         user = CurrentUser(
-            id=1, dept_ids=[1, 2], role_ids=[3],  # 简化字段
+            id=1,
+            dept_ids=[1, 2],
+            role_ids=[3],  # 简化字段
         )
         # 构造 UnitPermissionRecord 列表（4 类）
         perms = [
             UnitPermissionRecord(unit_id=10, target_type="global", target_id=None),
-            UnitPermissionRecord(unit_id=11, target_type="department", target_id=2),     # 命中
-            UnitPermissionRecord(unit_id=12, target_type="role", target_id=3),           # 命中
-            UnitPermissionRecord(unit_id=13, target_type="user", target_id=1),           # 命中
-            UnitPermissionRecord(unit_id=14, target_type="department", target_id=99),    # 不命中
+            UnitPermissionRecord(unit_id=11, target_type="department", target_id=2),  # 命中
+            UnitPermissionRecord(unit_id=12, target_type="role", target_id=3),  # 命中
+            UnitPermissionRecord(unit_id=13, target_type="user", target_id=1),  # 命中
+            UnitPermissionRecord(unit_id=14, target_type="department", target_id=99),  # 不命中
         ]
         svc = KnowledgePermissionService(unit_repo=None, redis=None)  # 纯函数只需占位
         bitmap = svc.compute_user_permission_bitmap_sync(user, perms)
-        assert bitmap == {10, 11, 12, 13}        # 14 不命中
+        assert bitmap == {10, 11, 12, 13}  # 14 不命中
 ```
 
 ---

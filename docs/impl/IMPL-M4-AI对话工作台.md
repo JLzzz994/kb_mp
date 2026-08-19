@@ -40,6 +40,7 @@ tests/
 ```python
 # app/workflows/state.py
 """LangGraph ChatState：业务状态（可序列化部分）。"""
+
 from typing import TypedDict
 
 
@@ -50,7 +51,7 @@ class ChatState(TypedDict, total=False):
     user_dept_ids: list[int]
     user_role_ids: list[int]
     question: str
-    history: list[dict]                     # trim 后的多轮历史
+    history: list[dict]  # trim 后的多轮历史
     slots: dict
     pending_turn: dict | None
 
@@ -58,7 +59,7 @@ class ChatState(TypedDict, total=False):
     faq_cached_answer: str | None
     faq_cached_unit_id: int | None
     faq_cached_unit_updated_at: str | None
-    recalled_units: list[dict]              # [{unit_id, score}]
+    recalled_units: list[dict]  # [{unit_id, score}]
     reranked_units: list[dict]
     authorized_unit_ids: list[int]
     unauthorized_unit_ids: list[int]
@@ -68,7 +69,7 @@ class ChatState(TypedDict, total=False):
     usage: dict
 
     # === 事件输出（供 SSE 推送）===
-    events_to_emit: list[dict]              # [{type, data}]
+    events_to_emit: list[dict]  # [{type, data}]
 
 
 # app/workflows/context.py
@@ -95,6 +96,7 @@ class GraphContext(TypedDict):
 ```python
 # app/workflows/nodes/faq_cache_lookup.py
 """节点节点 1：FAQ 缓存命中（含单元版本校验）。"""
+
 from app.workflows.state import ChatState
 from app.workflows.context import GraphContext
 
@@ -168,6 +170,7 @@ async def retrieve(state: ChatState, ctx: GraphContext) -> dict:
 ```python
 # app/workflows/nodes/rerank.py
 """节点节点 3：动态断崖截断。"""
+
 GAP_RATIO = 0.75
 MIN_TOPK = 1
 MAX_TOPK = 10
@@ -260,10 +263,12 @@ async def permission_filter(state: ChatState, ctx: GraphContext) -> dict:
     for u in reranked:
         if u["unit_id"] in authorized_set:
             title = await ctx["unit_repo"].get_title(u["unit_id"])
-            events.append({
-                "type": "citation",
-                "data": {"unit_id": u["unit_id"], "title": title, "score": u["score"]},
-            })
+            events.append(
+                {
+                    "type": "citation",
+                    "data": {"unit_id": u["unit_id"], "title": title, "score": u["score"]},
+                }
+            )
 
     return {
         "authorized_unit_ids": authorized,
@@ -285,9 +290,8 @@ async def interrupt_node(state: ChatState, ctx: GraphContext) -> dict:
     2. 写 pending_turn 到 chat_sessions
     3. 推 SSE interrupt 事件
     """
-    reason = (
-        state.get("interrupt_reason")
-        or ("no_recall" if not state.get("recalled_units") else "no_recall_with_permission")
+    reason = state.get("interrupt_reason") or (
+        "no_recall" if not state.get("recalled_units") else "no_recall_with_permission"
     )
 
     # 1. 写 pending_turn
@@ -305,22 +309,25 @@ async def interrupt_node(state: ChatState, ctx: GraphContext) -> dict:
 
     # 2. 推 SSE interrupt
     return {
-            "events_to_emit": [{
+        "events_to_emit": [
+            {
                 "type": "interrupt",
                 "data": {
                     "reason": reason,
                     "session_id": state["session_id"],
                 },
-            }],
-        }
+            }
+        ],
+    }
 ```
 
 ```python
 # app/workflows/nodes/assemble_prompt.py
 """节点节点 6：Prompt 组装。"""
+
 from langchain_core.messages import trim_messages
 
-HISTORY_WINDOW = 6    # 6 轮
+HISTORY_WINDOW = 6  # 6 轮
 MAX_PROMPT_TOKENS = 8000
 
 
@@ -340,7 +347,7 @@ async def assemble_prompt(state: ChatState, ctx: GraphContext) -> dict:
     units = await ctx["unit_repo"].list_content_for_ids(authorized_ids[:5])
 
     context_block = "\n\n".join(
-        f"[知识单元 #{u.id}] {u.title}\n{u.content[:800]}"     # 单条限 800 字
+        f"[知识单元 #{u.id}] {u.title}\n{u.content[:800]}"  # 单条限 800 字
         for u in units
     )
 
@@ -356,7 +363,7 @@ async def assemble_prompt(state: ChatState, ctx: GraphContext) -> dict:
         )
 
     # 3. 渲染 system prompt
-    sys_template = ctx["settings"].system_prompt_template    # 从 prompts/system_kb_qa.jinja2 读
+    sys_template = ctx["settings"].system_prompt_template  # 从 prompts/system_kb_qa.jinja2 读
     sys_msg = sys_template.render(
         context_block=context_block + resume_note,
         user_role_codes=state.get("user_role_codes", []),
@@ -403,10 +410,16 @@ async def generate(state: ChatState, ctx: GraphContext) -> dict:
                 "response_time_ms": 0,
                 "source": "faq_cache",
             },
-            "events_to_emit": [{
-                "type": "citation",
-                "data": {"unit_id": state.get("faq_cached_unit_id"), "score": 1.0, "source": "faq_cache"},
-            }],
+            "events_to_emit": [
+                {
+                    "type": "citation",
+                    "data": {
+                        "unit_id": state.get("faq_cached_unit_id"),
+                        "score": 1.0,
+                        "source": "faq_cache",
+                    },
+                }
+            ],
         }
 
     # 2-3. LLM 流式
@@ -455,25 +468,34 @@ async def record_log(state: ChatState, ctx: GraphContext) -> dict:
     2. INSERT（失败不抛错）
     """
     try:
-        await ctx["log_repo"].insert({
-            "session_id": state["session_id"],
-            "user_id": state["user_id"],
-            "question": state["question"],
-            "answer": "".join(state["answer_chunks"]),
-            "recalled_unit_ids_json": __import__("json").dumps([
-                {"id": u["unit_id"], "score": u["score"]}
-                for u in state.get("recalled_units", [])
-            ]),
-            "authorized_unit_ids_json": __import__("json").dumps(state.get("authorized_unit_ids", [])),
-            "unauthorized_unit_ids_json": __import__("json").dumps(state.get("unauthorized_unit_ids", [])),
-            "prompt_tokens": state["usage"].get("prompt_tokens"),
-            "completion_tokens": state["usage"].get("completion_tokens"),
-            "total_tokens": state["usage"].get("total_tokens"),
-            "response_time_ms": state["usage"].get("response_time_ms"),
-            "source": state["usage"].get("source", "llm"),
-        })
+        await ctx["log_repo"].insert(
+            {
+                "session_id": state["session_id"],
+                "user_id": state["user_id"],
+                "question": state["question"],
+                "answer": "".join(state["answer_chunks"]),
+                "recalled_unit_ids_json": __import__("json").dumps(
+                    [
+                        {"id": u["unit_id"], "score": u["score"]}
+                        for u in state.get("recalled_units", [])
+                    ]
+                ),
+                "authorized_unit_ids_json": __import__("json").dumps(
+                    state.get("authorized_unit_ids", [])
+                ),
+                "unauthorized_unit_ids_json": __import__("json").dumps(
+                    state.get("unauthorized_unit_ids", [])
+                ),
+                "prompt_tokens": state["usage"].get("prompt_tokens"),
+                "completion_tokens": state["usage"].get("completion_tokens"),
+                "total_tokens": state["usage"].get("total_tokens"),
+                "response_time_ms": state["usage"].get("response_time_ms"),
+                "source": state["usage"].get("source", "llm"),
+            }
+        )
     except Exception as exc:
         from loguru import logger
+
         logger.warning("qa_access_log.write.fail session={} error={}", state["session_id"], exc)
     return {}
 ```
@@ -485,15 +507,21 @@ async def record_log(state: ChatState, ctx: GraphContext) -> dict:
 ```python
 # app/workflows/graph.py
 """LangGraph 装配。"""
+
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.workflows.state import ChatState
 from app.workflows.context import GraphContext
 from app.workflows.nodes import (
-    faq_cache_lookup, retrieve, rerank,
-    permission_filter, interrupt_node,
-    assemble_prompt, generate, record_log,
+    faq_cache_lookup,
+    retrieve,
+    rerank,
+    permission_filter,
+    interrupt_node,
+    assemble_prompt,
+    generate,
+    record_log,
 )
 
 
@@ -574,6 +602,7 @@ def get_chat_graph():
 ```python
 # app/services/ai_service.py
 """AIService：编排图执行 + SSE 事件流推送。"""
+
 import json
 from typing import AsyncIterator
 
@@ -611,7 +640,9 @@ class AIService:
         self._unit_repo = unit_repo
         self._session_service = session_service
 
-    async def chat_stream(self, session_id: str, question: str, user: CurrentUser) -> AsyncIterator[bytes]:
+    async def chat_stream(
+        self, session_id: str, question: str, user: CurrentUser
+    ) -> AsyncIterator[bytes]:
         """主入口：SSE 流式问答。
 
         步骤：
@@ -728,6 +759,7 @@ class AIService:
     ):
         """追加 turn + 清 pending_turn（经 ChatSessionService）。"""
         from datetime import datetime
+
         new_turn = {
             "role": "user",
             "content": question,
@@ -748,7 +780,9 @@ class AIService:
             assistant_turn=new_turn_answer,
         )
 
-    async def chat_resume(self, session_id: str, question: str, user: CurrentUser) -> AsyncIterator[bytes]:
+    async def chat_resume(
+        self, session_id: str, question: str, user: CurrentUser
+    ) -> AsyncIterator[bytes]:
         """续接被 interrupt 挂起的会话。
 
         步骤：
@@ -774,7 +808,9 @@ class AIService:
         # 同时 assemble_prompt 会基于 pending_turn 调整上下文（例如携带 recall 历史与 reason）。
         logger.info(
             "ai.chat_resume session={} user={} reason={}",
-            session_id, user.id, pending.get("reason"),
+            session_id,
+            user.id,
+            pending.get("reason"),
         )
         async for chunk in self.chat_stream(session_id, question, user):
             yield chunk
@@ -788,12 +824,17 @@ class AIService:
 # app/repositories/chat_session_repository.py
 class ChatSessionRepository:
     async def find_by_id(self, session_id: str) -> ChatSessionRecord | None: ...
-    async def list_by_user(self, user_id: int, *, page: int, page_size: int) -> tuple[list[ChatSessionRecord], int]: ...
+    async def list_by_user(
+        self, user_id: int, *, page: int, page_size: int
+    ) -> tuple[list[ChatSessionRecord], int]: ...
     async def insert(self, record: ChatSessionRecord) -> None: ...
     async def delete(self, session_id: str, user_id: int) -> None: ...
 
     async def append_turn_and_clear_pending(
-        self, session_id: str, user_turn: dict, assistant_turn: dict | None,
+        self,
+        session_id: str,
+        user_turn: dict,
+        assistant_turn: dict | None,
     ) -> None:
         """追加 turn + 清 pending_turn。
 
@@ -822,12 +863,14 @@ class ChatSessionService:
 
     async def create(self, user: CurrentUser, req: CreateSessionRequest) -> ChatSessionResponse:
         session_id = str(uuid.uuid4())
-        await self._repo.insert(ChatSessionRecord(
-            id=session_id,
-            user_id=user.id,
-            title=req.title or "新会话",
-            history_json={"turns": [], "slots": {}, "pending_turn": None},
-        ))
+        await self._repo.insert(
+            ChatSessionRecord(
+                id=session_id,
+                user_id=user.id,
+                title=req.title or "新会话",
+                history_json={"turns": [], "slots": {}, "pending_turn": None},
+            )
+        )
         return await self.get(session_id, user)
 
     async def get(self, session_id: str, user: CurrentUser) -> ChatSessionResponse:
@@ -857,7 +900,9 @@ class ChatSessionService:
         2. 转 SessionListItem
         """
         rows, total = await self._repo.list_by_user(
-            user_id=user.id, page=page, page_size=page_size,
+            user_id=user.id,
+            page=page,
+            page_size=page_size,
         )
         items = [
             SessionListItem(
@@ -869,7 +914,9 @@ class ChatSessionService:
         ]
         return items, total
 
-    async def update(self, session_id: str, req: UpdateSessionRequest, user: CurrentUser) -> ChatSessionResponse:
+    async def update(
+        self, session_id: str, req: UpdateSessionRequest, user: CurrentUser
+    ) -> ChatSessionResponse:
         record = await self._repo.find_by_id(session_id)
         if record is None or record.user_id != user.id:
             raise SessionNotFoundError(session_id)
@@ -916,40 +963,61 @@ class ChatSessionService:
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
 
-@router.post("/sessions", response_model=ChatSessionResponse, status_code=201,
-             dependencies=[Depends(require_permission("ai:chat"))])
-async def create_session(req: CreateSessionRequest, user: CurrentUserDep, service: ChatSessionServiceDep):
+@router.post(
+    "/sessions",
+    response_model=ChatSessionResponse,
+    status_code=201,
+    dependencies=[Depends(require_permission("ai:chat"))],
+)
+async def create_session(
+    req: CreateSessionRequest, user: CurrentUserDep, service: ChatSessionServiceDep
+):
     return await service.create(user, req)
 
 
-@router.get("/sessions", response_model=SessionListResponse,
-            dependencies=[Depends(require_permission("ai:chat"))])
-async def list_sessions(user: CurrentUserDep, service: ChatSessionServiceDep,
-                        page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+@router.get(
+    "/sessions",
+    response_model=SessionListResponse,
+    dependencies=[Depends(require_permission("ai:chat"))],
+)
+async def list_sessions(
+    user: CurrentUserDep,
+    service: ChatSessionServiceDep,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
     items, total = await service.list(user, page, page_size)
     return SessionListResponse(items=items, page=page, page_size=page_size, total=total)
 
 
-@router.get("/sessions/{session_id}", response_model=ChatSessionResponse,
-            dependencies=[Depends(require_permission("ai:chat"))])
+@router.get(
+    "/sessions/{session_id}",
+    response_model=ChatSessionResponse,
+    dependencies=[Depends(require_permission("ai:chat"))],
+)
 async def get_session(session_id: str, user: CurrentUserDep, service: ChatSessionServiceDep):
     return await service.get(session_id, user)
 
 
-@router.patch("/sessions/{session_id}", response_model=ChatSessionResponse,
-              dependencies=[Depends(require_permission("ai:chat"))])
-async def update_session(session_id: str, req: UpdateSessionRequest, user: CurrentUserDep, service: ChatSessionServiceDep):
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=ChatSessionResponse,
+    dependencies=[Depends(require_permission("ai:chat"))],
+)
+async def update_session(
+    session_id: str, req: UpdateSessionRequest, user: CurrentUserDep, service: ChatSessionServiceDep
+):
     return await service.update(session_id, req, user)
 
 
-@router.delete("/sessions/{session_id}", status_code=204,
-               dependencies=[Depends(require_permission("ai:chat"))])
+@router.delete(
+    "/sessions/{session_id}", status_code=204, dependencies=[Depends(require_permission("ai:chat"))]
+)
 async def delete_session(session_id: str, user: CurrentUserDep, service: ChatSessionServiceDep):
     await service.delete(session_id, user)
 
 
-@router.post("/chat/stream",
-             dependencies=[Depends(require_permission("ai:chat"))])
+@router.post("/chat/stream", dependencies=[Depends(require_permission("ai:chat"))])
 async def chat_stream(
     req: ChatStreamRequest,
     user: CurrentUserDep,
@@ -961,13 +1029,12 @@ async def chat_stream(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",       # 关闭 Nginx 缓冲
+            "X-Accel-Buffering": "no",  # 关闭 Nginx 缓冲
         },
     )
 
 
-@router.post("/chat/resume",
-             dependencies=[Depends(require_permission("ai:chat"))])
+@router.post("/chat/resume", dependencies=[Depends(require_permission("ai:chat"))])
 async def chat_resume(
     req: ChatResumeRequest,
     user: CurrentUserDep,
@@ -988,7 +1055,6 @@ async def chat_resume(
 # tests/test_chat_session.py
 @pytest.mark.asyncio
 class TestSession:
-
     async def test_create_session_returns_uuid(self, async_client, alice_token):
         resp = await async_client.post(
             "/api/v1/ai/sessions",
@@ -997,15 +1063,19 @@ class TestSession:
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert len(body["id"]) == 36      # UUID4
+        assert len(body["id"]) == 36  # UUID4
         assert body["title"] == "测试会话"
 
     async def test_get_session_other_user_returns_403(self, async_client, alice_token, bob_token):
         # Alice 创建
-        create_resp = await async_client.post("/api/v1/ai/sessions", json={}, headers=auth_header(alice_token))
+        create_resp = await async_client.post(
+            "/api/v1/ai/sessions", json={}, headers=auth_header(alice_token)
+        )
         session_id = create_resp.json()["id"]
         # Bob 访问
-        resp = await async_client.get(f"/api/v1/ai/sessions/{session_id}", headers=auth_header(bob_token))
+        resp = await async_client.get(
+            f"/api/v1/ai/sessions/{session_id}", headers=auth_header(bob_token)
+        )
         assert resp.status_code == 403
         assert resp.json()["error_code"] == "chat_session_not_owned"
 
@@ -1013,9 +1083,12 @@ class TestSession:
 # tests/test_chat_stream_e2e.py
 @pytest.mark.asyncio
 class TestChatStream:
-
     async def test_full_pipeline_emits_events(
-        self, async_client, alice_token, seeded_units_with_global_perm, mock_llm_with_text,
+        self,
+        async_client,
+        alice_token,
+        seeded_units_with_global_perm,
+        mock_llm_with_text,
     ):
         req = {"session_id": str(uuid.uuid4()), "question": "如何重置密码？"}
         resp = await async_client.post(
@@ -1035,7 +1108,10 @@ class TestChatStream:
         assert "usage" in final["data"]
 
     async def test_faq_cache_hit_skips_retrieve(
-        self, async_client, alice_token, seeded_faq_cache,
+        self,
+        async_client,
+        alice_token,
+        seeded_faq_cache,
     ):
         req = {"session_id": str(uuid.uuid4()), "question": "重置密码"}
         resp = await async_client.post(
@@ -1046,12 +1122,17 @@ class TestChatStream:
         events = parse_sse_events(resp.text)
         types = [e["type"] for e in events]
         # 应跳过 retrieve，无 progress 节点
-        assert "progress" not in types or "retrieve" not in [e["data"].get("step") for e in events if e["type"] == "progress"]
+        assert "progress" not in types or "retrieve" not in [
+            e["data"].get("step") for e in events if e["type"] == "progress"
+        ]
         final = next(e for e in events if e["type"] == "final")
         assert final["data"]["usage"]["source"] == "faq_cache"
 
     async def test_unauthorized_units_emitted(
-        self, async_client, alice_token, seeded_units_mixed_perm,
+        self,
+        async_client,
+        alice_token,
+        seeded_units_mixed_perm,
     ):
         req = {"session_id": str(uuid.uuid4()), "question": "敏感问题"}
         resp = await async_client.post(
@@ -1067,9 +1148,11 @@ class TestChatStream:
 # tests/test_chat_interrupt_resume.py
 @pytest.mark.asyncio
 class TestInterrupt:
-
     async def test_interrupt_when_no_recall(
-        self, async_client, alice_token, mock_llm_no_recall,
+        self,
+        async_client,
+        alice_token,
+        mock_llm_no_recall,
     ):
         req = {"session_id": str(uuid.uuid4()), "question": "完全没收录的问题"}
         resp = await async_client.post(
@@ -1082,7 +1165,9 @@ class TestInterrupt:
         assert len(interrupt) == 1
         assert interrupt[0]["data"]["reason"] == "no_recall"
 
-    async def test_interrupt_writes_pending_turn(self, async_client, alice_token, mock_llm_no_recall):
+    async def test_interrupt_writes_pending_turn(
+        self, async_client, alice_token, mock_llm_no_recall
+    ):
         session_id = str(uuid.uuid4())
         # 制造 interrupt
         await async_client.post(
@@ -1099,7 +1184,10 @@ class TestInterrupt:
         assert body["history_json"]["pending_turn"] is not None
 
     async def test_resume_uses_pending_turn(
-        self, async_client, alice_token, mock_llm,
+        self,
+        async_client,
+        alice_token,
+        mock_llm,
     ):
         session_id = str(uuid.uuid4())
         # 制造 interrupt
@@ -1122,38 +1210,50 @@ class TestInterrupt:
 # tests/test_workflow_nodes.py
 @pytest.mark.asyncio
 class TestNodes:
-
     async def test_rerank_dynamic_cut(self):
         from app.workflows.nodes.rerank import rerank, GAP_RATIO, MAX_TOPK
+
         # 构造：scores = [1.0, 0.9, 0.7, 0.3]
         # 0.9/1.0 = 0.9 > 0.75 → 保留
         # 0.7/0.9 = 0.78 > 0.75 → 保留
         # 0.3/0.7 = 0.43 < 0.75 → 截断
-        state = {"recalled_units": [
-            {"unit_id": 1, "score": 1.0},
-            {"unit_id": 2, "score": 0.9},
-            {"unit_id": 3, "score": 0.7},
-            {"unit_id": 4, "score": 0.3},
-        ]}
+        state = {
+            "recalled_units": [
+                {"unit_id": 1, "score": 1.0},
+                {"unit_id": 2, "score": 0.9},
+                {"unit_id": 3, "score": 0.7},
+                {"unit_id": 4, "score": 0.3},
+            ]
+        }
         result = await rerank(state, mock_ctx({}))
         assert [u["unit_id"] for u in result["reranked_units"]] == [1, 2, 3]
 
     async def test_faq_cache_lookup_version_mismatch_invalidates(
-        self, redis_client, mock_unit_repo,
+        self,
+        redis_client,
+        mock_unit_repo,
     ):
         # 设置缓存
-        await redis_client.hset("faq:cache:abc", mapping={
-            "answer": "old answer",
-            "related_unit_id": "1",
-            "unit_updated_at": "2026-01-01T00:00:00",
-        })
+        await redis_client.hset(
+            "faq:cache:abc",
+            mapping={
+                "answer": "old answer",
+                "related_unit_id": "1",
+                "unit_updated_at": "2026-01-01T00:00:00",
+            },
+        )
         # mock unit_repo 返回不同 updated_at
         mock_unit_repo.get_updated_at.return_value = datetime(2026, 8, 19)
         state = {"question": "test"}
-        result = await faq_cache_lookup(state, mock_ctx({
-            "redis": redis_client,
-            "unit_repo": mock_unit_repo,
-        }))
+        result = await faq_cache_lookup(
+            state,
+            mock_ctx(
+                {
+                    "redis": redis_client,
+                    "unit_repo": mock_unit_repo,
+                }
+            ),
+        )
         assert result["faq_cached_answer"] is None
         # 缓存应被删除
         assert await redis_client.exists("faq:cache:abc") == 0

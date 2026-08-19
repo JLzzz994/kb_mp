@@ -29,6 +29,7 @@ tests/test_dashboard.py
 ```python
 # app/repositories/dashboard_repository.py
 """DashboardRepository：仅做聚合查询，不写。"""
+
 from datetime import datetime, timedelta
 from sqlalchemy import select, func, text, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,9 +82,8 @@ class DashboardRepository:
             }
 
         # 2. 单元数
-        unit_count_stmt = (
-            select(func.count(KnowledgeUnitRecord.id))
-            .where(KnowledgeUnitRecord.status == "active")
+        unit_count_stmt = select(func.count(KnowledgeUnitRecord.id)).where(
+            KnowledgeUnitRecord.status == "active"
         )
         unit_count = (await self._session.execute(unit_count_stmt)).scalar_one()
 
@@ -255,16 +255,19 @@ class DashboardRepository:
             buckets.setdefault(row.bucket_date, []).append(int(row.response_time_ms or 0))
 
         import numpy as np
+
         result = []
         for avg_row in avg_rows:
             samples = buckets.get(avg_row.bucket_date, [])
             p95 = int(np.percentile(samples, 95)) if samples else 0
-            result.append({
-                "bucket_date": avg_row.bucket_date,
-                "avg_response_time_ms": float(avg_row.avg or 0),
-                "p95_response_time_ms": p95,
-                "sample_count": int(avg_row.n),
-            })
+            result.append(
+                {
+                    "bucket_date": avg_row.bucket_date,
+                    "avg_response_time_ms": float(avg_row.avg or 0),
+                    "p95_response_time_ms": p95,
+                    "sample_count": int(avg_row.n),
+                }
+            )
         return result
 ```
 
@@ -290,7 +293,9 @@ class DashboardService:
             range_days=range_days,
         )
 
-    async def question_rankings(self, range_days: int, limit: int = 20) -> list[QuestionRankingItem]:
+    async def question_rankings(
+        self, range_days: int, limit: int = 20
+    ) -> list[QuestionRankingItem]:
         items = await self._repo.fetch_question_rankings(range_days, limit)
         return [QuestionRankingItem(**item) for item in items]
 
@@ -316,8 +321,11 @@ class DashboardService:
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
 
-@router.get("/metrics", response_model=MetricsResponse,
-            dependencies=[Depends(require_permission("dashboard:read"))])
+@router.get(
+    "/metrics",
+    response_model=MetricsResponse,
+    dependencies=[Depends(require_permission("dashboard:read"))],
+)
 async def get_metrics(
     service: DashboardServiceDep,
     range: str = Query("7d", pattern=r"^(7|30|90)d$"),
@@ -326,8 +334,11 @@ async def get_metrics(
     return await service.metrics(range_days)
 
 
-@router.get("/rankings/questions", response_model=list[QuestionRankingItem],
-            dependencies=[Depends(require_permission("dashboard:read"))])
+@router.get(
+    "/rankings/questions",
+    response_model=list[QuestionRankingItem],
+    dependencies=[Depends(require_permission("dashboard:read"))],
+)
 async def get_question_rankings(
     service: DashboardServiceDep,
     range: str = Query("7d", pattern=r"^(7|30|90)d$"),
@@ -337,8 +348,11 @@ async def get_question_rankings(
     return await service.question_rankings(range_days, limit)
 
 
-@router.get("/rankings/units", response_model=list[UnitRankingItem],
-            dependencies=[Depends(require_permission("dashboard:read"))])
+@router.get(
+    "/rankings/units",
+    response_model=list[UnitRankingItem],
+    dependencies=[Depends(require_permission("dashboard:read"))],
+)
 async def get_unit_rankings(
     service: DashboardServiceDep,
     range: str = Query("7d", pattern=r"^(7|30|90)d$"),
@@ -348,8 +362,11 @@ async def get_unit_rankings(
     return await service.unit_rankings(range_days, limit)
 
 
-@router.get("/stats/tokens", response_model=list[TokenStatsBucket],
-            dependencies=[Depends(require_permission("dashboard:read"))])
+@router.get(
+    "/stats/tokens",
+    response_model=list[TokenStatsBucket],
+    dependencies=[Depends(require_permission("dashboard:read"))],
+)
 async def get_token_stats(
     service: DashboardServiceDep,
     range: str = Query("7d", pattern=r"^(7|30)d$"),
@@ -358,8 +375,11 @@ async def get_token_stats(
     return await service.token_stats(range_days)
 
 
-@router.get("/stats/response-time", response_model=list[ResponseTimeStatsBucket],
-            dependencies=[Depends(require_permission("dashboard:read"))])
+@router.get(
+    "/stats/response-time",
+    response_model=list[ResponseTimeStatsBucket],
+    dependencies=[Depends(require_permission("dashboard:read"))],
+)
 async def get_response_time_stats(
     service: DashboardServiceDep,
     range: str = Query("7d", pattern=r"^(7|30)d$"),
@@ -376,7 +396,6 @@ async def get_response_time_stats(
 # tests/test_dashboard.py
 @pytest.mark.asyncio
 class TestMetrics:
-
     async def test_metrics_returns_five_indicators(self, async_client, admin_token, seeded_logs):
         resp = await async_client.get(
             "/api/v1/dashboard/metrics?range=7d",
@@ -385,8 +404,12 @@ class TestMetrics:
         assert resp.status_code == 200
         body = resp.json()
         assert set(body.keys()) == {
-            "access_count", "unique_users", "unit_count",
-            "total_tokens", "avg_response_time_ms", "range_days",
+            "access_count",
+            "unique_users",
+            "unit_count",
+            "total_tokens",
+            "avg_response_time_ms",
+            "range_days",
         }
         assert body["range_days"] == 7
 
@@ -407,7 +430,6 @@ class TestMetrics:
 
 @pytest.mark.asyncio
 class TestRankings:
-
     async def test_question_rankings_order_by_count(self, async_client, admin_token, seeded_logs):
         resp = await async_client.get(
             "/api/v1/dashboard/rankings/questions?range=30d",
@@ -425,12 +447,11 @@ class TestRankings:
         )
         body = resp.json()
         unit_ids = [item["unit_id"] for item in body]
-        assert len(unit_ids) == len(set(unit_ids))     # 去重
+        assert len(unit_ids) == len(set(unit_ids))  # 去重
 
 
 @pytest.mark.asyncio
 class TestStats:
-
     async def test_token_stats_bucket_by_day(self, async_client, admin_token, seeded_logs):
         resp = await async_client.get(
             "/api/v1/dashboard/stats/tokens?range=7d",

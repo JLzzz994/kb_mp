@@ -44,6 +44,7 @@ tests/
 ```python
 # app/domain/user.py
 """用户领域实体与当前用户上下文。"""
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -51,34 +52,39 @@ from datetime import datetime
 @dataclass(slots=True, frozen=True)
 class UserEntity:
     """纯领域实体；不含 ORM 依赖。"""
+
     id: int
     username: str
     display_name: str
     department_id: int
-    status: int                         # 1=启用 / 0=停用
+    status: int  # 1=启用 / 0=停用
 
 
 @dataclass(slots=True, frozen=True)
 class UserWithPassword(UserEntity):
     """仅 Repository 内部使用；Service 层对外不应暴露 password_hash。"""
+
     password_hash: str
 
 
 @dataclass(slots=True, frozen=True)
 class CurrentUser:
     """登录后注入到请求上下文的当前用户信息。"""
+
     id: int
     username: str
     display_name: str
     department_id: int
     department_name: str
     role_codes: list[str]
-    dept_ids: list[int]                 # 用户所属部门 + 所有祖先部门 id
+    dept_ids: list[int]  # 用户所属部门 + 所有祖先部门 id
     role_ids: list[int]
 
 
 # app/domain/permission.py
 """权限码常量。"""
+
+
 class PermissionCode:
     USER_READ = "user:read"
     USER_WRITE = "user:write"
@@ -99,14 +105,24 @@ class PermissionCode:
     GAP_READ = "gap:read"
     # 注意：原 gap:write 已在 ADR-0007 后移除（H4 决议）
 
+
 ALL_PERMISSION_CODES: list[str] = [
-    "user:read", "user:write",
-    "role:read", "role:write",
-    "dept:read", "dept:write",
-    "knowledge:read", "knowledge:write", "knowledge:delete", "knowledge:assign_permission",
-    "knowledge:check", "ai:chat",
+    "user:read",
+    "user:write",
+    "role:read",
+    "role:write",
+    "dept:read",
+    "dept:write",
+    "knowledge:read",
+    "knowledge:write",
+    "knowledge:delete",
+    "knowledge:assign_permission",
+    "knowledge:check",
+    "ai:chat",
     "dashboard:read",
-    "faq:read", "faq:write", "faq:review",
+    "faq:read",
+    "faq:write",
+    "faq:review",
     "gap:read",
 ]
 ```
@@ -116,11 +132,18 @@ ALL_PERMISSION_CODES: list[str] = [
 ```python
 # app/repositories/auth_repository.py
 """AuthRepository：users / user_roles / role_permissions 查询。"""
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.user import UserWithPassword, CurrentUser
-from app.infrastructure.database import UserRecord, UserRoleRecord, RoleRecord, RolePermissionRecord, DepartmentRecord
+from app.infrastructure.database import (
+    UserRecord,
+    UserRoleRecord,
+    RoleRecord,
+    RolePermissionRecord,
+    DepartmentRecord,
+)
 
 
 class AuthRepository:
@@ -246,12 +269,15 @@ class AuthRepository:
 ```python
 # app/services/auth_service.py
 """AuthService：登录 / 当前用户 / 登出的业务编排。"""
+
 from loguru import logger
 
 from app.config.settings import settings
 from app.common.errors import (
-    InvalidCredentialsError, UserDisabledError,
-    AuthenticationRequiredError, InvalidAccessTokenError,
+    InvalidCredentialsError,
+    UserDisabledError,
+    AuthenticationRequiredError,
+    InvalidAccessTokenError,
 )
 from app.domain.user import CurrentUser
 from app.api.schemas.auth_response import LoginResponse, MeResponse, CurrentUserInfo
@@ -289,7 +315,7 @@ class AuthService:
         user = await self._repo.find_by_username(username)
         if user is None:
             logger.warning("auth.login.fail username={} reason=user_not_found", username)
-            raise InvalidCredentialsError()      # 不区分"用户不存在"和"密码错误"，防枚举
+            raise InvalidCredentialsError()  # 不区分"用户不存在"和"密码错误"，防枚举
 
         # 2. 校验账号状态
         if user.status != 1:
@@ -358,7 +384,7 @@ class AuthService:
         if cached is None:
             # 位图过期或被踢出，重算
             cached = await self._repo.list_permissions(
-                [code for code in user.role_codes]   # 用 role_codes 反查
+                [code for code in user.role_codes]  # 用 role_codes 反查
             )
             # 重写回 Redis
             await self._redis.set_bitmap(
@@ -403,6 +429,7 @@ class AuthService:
 - Hash (faq:cache:{hash}): hset / hgetall / hdel
 - 单例: get_redis()
 """
+
 from __future__ import annotations
 
 import redis.asyncio as aioredis
@@ -443,10 +470,12 @@ class RedisClient:
     async def set_bitmap(self, *, user_id: int, permissions: list[str], ttl: int) -> None:
         """写入位图（JSON 列表 + TTL）"""
         import json
+
         await self._client.set(self._bitmap_key(user_id), json.dumps(permissions), ex=ttl)
 
     async def get_bitmap(self, user_id: int) -> list[str] | None:
         import json
+
         raw = await self._client.get(self._bitmap_key(user_id))
         if raw is None:
             return None
@@ -496,6 +525,7 @@ def get_redis() -> RedisClient:
 ```python
 # app/infrastructure/password_hasher.py
 """bcrypt 密码哈希与验证。"""
+
 import bcrypt
 
 
@@ -529,7 +559,8 @@ from app.config.settings import settings
 @dataclass(slots=True, frozen=True)
 class TokenPayload:
     """JWT 解码后的 Claims。"""
-    sub: int                    # user_id
+
+    sub: int  # user_id
     username: str
     role_codes: list[str]
     iat: int
@@ -582,6 +613,7 @@ class JWTIssuer:
 ```python
 # app/api/routers/auth_router.py
 """认证路由：/login /me /logout。"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
@@ -617,6 +649,7 @@ async def logout(user: CurrentUserDep, service: AuthServiceDep) -> Response:
 ```python
 # app/api/dependencies.py（增量补丁）
 """依赖注入链。"""
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -662,6 +695,7 @@ def require_permission(*codes: str):
     用法：
         @router.get(..., dependencies=[Depends(require_permission("user:read"))])
     """
+
     async def checker(
         user: CurrentUserDep,
         redis: Annotated[RedisClient, Depends(get_redis)],
@@ -673,6 +707,7 @@ def require_permission(*codes: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="permission_denied",
             )
+
     return Depends(checker)
 ```
 
@@ -739,6 +774,7 @@ export const authApi = {
 ```python
 # tests/test_auth_login.py
 """登录端点测试。"""
+
 import pytest
 from httpx import AsyncClient
 
@@ -749,7 +785,9 @@ from app.main_module import app
 class TestLogin:
     """POST /api/v1/auth/login 三种状态：成功 / 凭据错 / 账号停用。"""
 
-    async def test_login_success_returns_token_and_permissions(self, async_client: AsyncClient, seeded_admin):
+    async def test_login_success_returns_token_and_permissions(
+        self, async_client: AsyncClient, seeded_admin
+    ):
         """正确凭据返回 access_token + user_info + 17 个权限码。"""
         # Arrange: seeded_admin fixture 已创建 admin 用户并写入 bcrypt 哈希密码
         req = {"username": "admin", "password": "Admin@123"}
@@ -767,9 +805,11 @@ class TestLogin:
         assert body["user_info"]["role_codes"] == ["system_admin"]
         assert "user:read" in body["permissions"]
         assert "user:write" in body["permissions"]
-        assert len(body["permissions"]) == 17     # 系统管理员全权限
+        assert len(body["permissions"]) == 17  # 系统管理员全权限
 
-    async def test_login_wrong_password_returns_invalid_credentials(self, async_client, seeded_admin):
+    async def test_login_wrong_password_returns_invalid_credentials(
+        self, async_client, seeded_admin
+    ):
         """错误密码返回 401 invalid_credentials，不区分用户是否存在。"""
         req = {"username": "admin", "password": "WrongPassword"}
         resp = await async_client.post("/api/v1/auth/login", json=req)
@@ -783,7 +823,9 @@ class TestLogin:
         assert resp.status_code == 401
         assert resp.json()["error_code"] == "invalid_credentials"
 
-    async def test_login_disabled_user_returns_user_disabled(self, async_client, seeded_disabled_user):
+    async def test_login_disabled_user_returns_user_disabled(
+        self, async_client, seeded_disabled_user
+    ):
         """status=0 用户返回 403 user_disabled。"""
         req = {"username": "disabled", "password": "Pass@1234"}
         resp = await async_client.post("/api/v1/auth/login", json=req)
@@ -811,7 +853,9 @@ class TestMe:
 
     async def test_me_with_valid_token_returns_user_info(self, async_client, admin_token):
         """带有效 token 返回 user_info + permissions。"""
-        resp = await async_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
+        resp = await async_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {admin_token}"}
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["user_info"]["username"] == "admin"
@@ -849,7 +893,9 @@ class TestToken:
 
     async def test_token_decode_returns_payload(self, jwt_issuer):
         """签发后解码 payload 一致。"""
-        token, expires_in = jwt_issuer.issue(user_id=42, username="alice", role_codes=["regular_user"])
+        token, expires_in = jwt_issuer.issue(
+            user_id=42, username="alice", role_codes=["regular_user"]
+        )
         payload = jwt_issuer.verify(token)
         assert payload.sub == 42
         assert payload.username == "alice"
@@ -859,8 +905,9 @@ class TestToken:
     async def test_token_expired_raises(self, jwt_issuer):
         """过期抛 InvalidAccessTokenError。"""
         from app.infrastructure.jwt import InvalidAccessTokenError
+
         # 制造一个立刻过期的 token
-        jwt_issuer._expire_minutes = 0       # 调整 TTL
+        jwt_issuer._expire_minutes = 0  # 调整 TTL
         token, _ = jwt_issuer.issue(user_id=1, username="alice", role_codes=[])
         with pytest.raises(InvalidAccessTokenError):
             jwt_issuer.verify(token)
@@ -888,7 +935,9 @@ class TestPermission:
         assert resp.status_code == 403
         assert resp.json()["error_code"] == "permission_denied"
 
-    async def test_bitmap_miss_recomputes_permissions(self, async_client, admin_token, redis_client):
+    async def test_bitmap_miss_recomputes_permissions(
+        self, async_client, admin_token, redis_client
+    ):
         """Redis 位图被 DEL 后下次请求自动重算。"""
         # 1. 首次调用（写入位图）
         resp1 = await async_client.get(
@@ -930,6 +979,7 @@ class TestPermission:
 ```python
 # tests/conftest.py
 """全局 fixture：admin / disabled / regular_user / tokens / redis / db。"""
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -965,7 +1015,7 @@ async def async_client(async_engine):
 @pytest_asyncio.fixture
 async def seeded_admin(async_engine):
     """创建 admin 用户 + system_admin 角色 + 17 权限码。"""
-    hasher = PasswordHasher(cost=4)       # 测试用低 cost 加速
+    hasher = PasswordHasher(cost=4)  # 测试用低 cost 加速
     async with AsyncSession(async_engine) as session:
         # INSERT roles + permissions + users ... 详见 seed.py
         ...
@@ -977,6 +1027,7 @@ async def seeded_admin(async_engine):
 def admin_token():
     """直接签发 admin token，绕过 /login。"""
     from app.infrastructure.jwt import JWTIssuer
+
     issuer = JWTIssuer(secret=settings.jwt_secret, expire_minutes=480)
     token, _ = issuer.issue(user_id=1, username="admin", role_codes=["system_admin"])
     return token
@@ -985,6 +1036,7 @@ def admin_token():
 @pytest.fixture
 def regular_user_token():
     from app.infrastructure.jwt import JWTIssuer
+
     issuer = JWTIssuer(secret=settings.jwt_secret, expire_minutes=480)
     token, _ = issuer.issue(user_id=3, username="alice", role_codes=["regular_user"])
     return token

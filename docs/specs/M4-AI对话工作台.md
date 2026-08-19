@@ -121,29 +121,35 @@ tests/
 class CreateSessionRequest(BaseModel):
     title: str | None = None
 
+
 class UpdateSessionRequest(BaseModel):
     title: str | None = None
+
 
 class ChatSessionResponse(BaseModel):
     id: str
     title: str | None
-    history_json: dict              # {turns: [...], slots: {...}, pending_turn: ...}
+    history_json: dict  # {turns: [...], slots: {...}, pending_turn: ...}
     created_at: datetime
     updated_at: datetime
+
 
 class SessionListItem(BaseModel):
     id: str
     title: str | None
     updated_at: datetime
 
+
 # chat_stream_schema.py
 class ChatStreamRequest(BaseModel):
     session_id: str
     question: str = Field(min_length=1, max_length=2000)
 
+
 class ChatResumeRequest(BaseModel):
     session_id: str
     question: str = Field(min_length=1, max_length=2000)
+
 
 # SSE Event 数据结构（在 api 层定义 EventSourceResponse data payload）
 class CitationEvent(BaseModel):
@@ -151,16 +157,19 @@ class CitationEvent(BaseModel):
     title: str
     score: float
 
+
 class UnauthorizedEvent(BaseModel):
     unit_ids: list[int]
+
 
 class InterruptEvent(BaseModel):
     reason: Literal["no_recall", "no_recall_with_permission", "low_confidence"]
     session_id: str
 
+
 class FinalEvent(BaseModel):
     answer: str
-    usage: dict                    # {prompt_tokens, completion_tokens, total_tokens, response_time_ms}
+    usage: dict  # {prompt_tokens, completion_tokens, total_tokens, response_time_ms}
 ```
 
 ---
@@ -191,7 +200,7 @@ class ChatState(TypedDict, total=False):
     user_dept_ids: list[int]
     user_role_ids: list[int]
     question: str
-    history: list[dict]                 # trim 后的多轮历史
+    history: list[dict]  # trim 后的多轮历史
     slots: dict
     pending_turn: dict | None
 
@@ -199,27 +208,27 @@ class ChatState(TypedDict, total=False):
     faq_cached_answer: str | None
     faq_cached_unit_id: int | None
     faq_cached_unit_updated_at: datetime | None
-    recalled_units: list[dict]          # [{unit_id, score}]
+    recalled_units: list[dict]  # [{unit_id, score}]
     reranked_units: list[dict]
     authorized_unit_ids: list[int]
     unauthorized_unit_ids: list[int]
     interrupt_reason: str | None
     prompt_messages: list[dict]
     answer_chunks: list[str]
-    usage: dict                         # {prompt_tokens, completion_tokens, total_tokens, response_time_ms}
+    usage: dict  # {prompt_tokens, completion_tokens, total_tokens, response_time_ms}
 
     # 输出（供 SSE 推送）
-    events_to_emit: list[dict]         # [{type: ..., data: ...}, ...]
+    events_to_emit: list[dict]  # [{type: ..., data: ...}, ...]
 ```
 
 ### 5.3 GraphContext（`workflows/context.py`）
 
 ```python
 class GraphContext(TypedDict):
-    llm: ChatOpenAI                     # 主 LLM
-    milvus: MilvusGateway               # 向量检索
-    redis: RedisClient                  # FAQ 缓存 / 鉴权位图
-    permission_service: KnowledgePermissionService   # M3
+    llm: ChatOpenAI  # 主 LLM
+    milvus: MilvusGateway  # 向量检索
+    redis: RedisClient  # FAQ 缓存 / 鉴权位图
+    permission_service: KnowledgePermissionService  # M3
     faq_cache_repo: FaqCacheRepository  # M6 接口
     session_repo: ChatSessionRepository
     log_repo: QaAccessLogRepository
@@ -261,7 +270,7 @@ def build_chat_graph() -> CompiledGraph:
     g.add_edge("assemble_prompt", "generate")
     g.add_edge("generate", "record_log")
     g.add_edge("record_log", END)
-    g.add_edge("interrupt", END)        # 不写 record_log
+    g.add_edge("interrupt", END)  # 不写 record_log
 
     return g.compile()
 ```
@@ -409,8 +418,14 @@ class AIService:
                 if chunk:
                     yield sse_event("delta", {"text": chunk})
             elif kind == "on_node_end" and event["node"] == "permission_filter":
-                yield sse_event("unauthorized", {"unit_ids": event["data"]["output"]["unauthorized_unit_ids"]})
-            elif kind == "on_node_end" and event["node"] == "permission_filter" and event["data"]["output"].get("reranked_units"):
+                yield sse_event(
+                    "unauthorized", {"unit_ids": event["data"]["output"]["unauthorized_unit_ids"]}
+                )
+            elif (
+                kind == "on_node_end"
+                and event["node"] == "permission_filter"
+                and event["data"]["output"].get("reranked_units")
+            ):
                 for u in event["data"]["output"]["reranked_units"]:
                     yield sse_event("citation", {"unit_id": u["unit_id"], "score": u["score"]})
 
@@ -423,17 +438,24 @@ class AIService:
 class ChatSessionService:
     async def create(self, user: CurrentUser, req: CreateSessionRequest) -> ChatSessionResponse:
         session_id = str(uuid.uuid4())
-        await self._repo.insert(session_id=session_id, user_id=user.id, title=req.title or "新会话",
-                                history_json={"turns": [], "slots": {}, "pending_turn": None})
+        await self._repo.insert(
+            session_id=session_id,
+            user_id=user.id,
+            title=req.title or "新会话",
+            history_json={"turns": [], "slots": {}, "pending_turn": None},
+        )
         return await self.get(session_id, user)
 
     async def append_turn(self, session_id: str, user: CurrentUser, turn: dict) -> None:
         """完成问答后追加 turn + 清 pending_turn"""
         await self._repo.append_turn_and_clear_pending(session_id, user.id, turn)
 
-    async def list(self, user: CurrentUser, page: int, page_size: int) -> tuple[list[SessionListItem], int]: ...
+    async def list(
+        self, user: CurrentUser, page: int, page_size: int
+    ) -> tuple[list[SessionListItem], int]: ...
 
-    async def get(self, session_id: str, user: CurrentUser) -> ChatSessionResponse: ...
+    async def get(self, session_id: str, user: CurrentUser) -> ChatSessionResponse:
+        ...
         # 校验 user_id == 当前用户
 
     async def delete(self, session_id: str, user: CurrentUser) -> None: ...
@@ -442,10 +464,20 @@ class ChatSessionService:
 ### 5.8 异常
 
 ```python
-class SessionNotFoundError(ResourceNotFoundError): error_code = "chat_session_not_found"
-class SessionPermissionDeniedError(PermissionDeniedError): error_code = "chat_session_not_owned"
-class NoRecallError(ValidationError): error_code = "no_recall"            # 触发 interrupt
-class NoRecallWithPermissionError(ValidationError): error_code = "no_recall_with_permission"
+class SessionNotFoundError(ResourceNotFoundError):
+    error_code = "chat_session_not_found"
+
+
+class SessionPermissionDeniedError(PermissionDeniedError):
+    error_code = "chat_session_not_owned"
+
+
+class NoRecallError(ValidationError):
+    error_code = "no_recall"  # 触发 interrupt
+
+
+class NoRecallWithPermissionError(ValidationError):
+    error_code = "no_recall_with_permission"
 ```
 
 ---
