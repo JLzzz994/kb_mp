@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import http_error_from_app_error
+from app.api.routers.ai_router import router as ai_router
 from app.api.routers.auth_router import router as auth_router
 from app.api.routers.health_router import router as health_router
 from app.api.routers.knowledge_router import router as knowledge_router
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(org_router)
     app.include_router(knowledge_router)
+    app.include_router(ai_router)
     return app
 
 
