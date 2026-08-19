@@ -3,7 +3,7 @@
 
 FROM python:3.12-slim AS builder
 
-# 系统依赖（psycopg/bcrypt/python-docx 等需要）
+# 系统依赖（编译 C 扩展）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
@@ -11,18 +11,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# 装依赖（先 copy lock 文件，最大化层缓存）
+# 装 uv（指定版本避免最新版 API 变更）
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir uv && \
-    uv export --format requirements-txt --no-hashes -o requirements.txt && \
+RUN pip install --no-cache-dir "uv>=0.4.0,<0.6.0" && \
+    uv export --format requirements-txt --no-hashes --extra langgraph --extra mysql --extra openai -o requirements.txt && \
     pip install --no-cache-dir -r requirements.txt
 
 # ── runtime ─────────────────────────────
 FROM python:3.12-slim AS runtime
 
+# 健康检查依赖（运行时的 Python HTTP 客户端）
+# httpx 已在 requirements.txt，无需重复安装
+
 WORKDIR /app
 
-# 复制依赖
+# 复制依赖（从 builder）
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
