@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import CurrentUserDep, get_db, get_redis, require_permission
+from app.api.schemas.knowledge_import_schema import ImportTaskResponse
 from app.api.schemas.knowledge_schema import (
     BatchDeleteRequest,
     CheckPermissionsRequest,
@@ -20,6 +21,10 @@ from app.api.schemas.knowledge_schema import (
     PermissionEntryResponse,
 )
 from app.infrastructure.redis_client import RedisClient
+from app.services.knowledge_import_service import (
+    KnowledgeImportService,
+    build_knowledge_import_service,
+)
 from app.services.knowledge_permission_service import (
     KnowledgePermissionService,
     build_knowledge_permission_service,
@@ -51,6 +56,44 @@ def get_knowledge_permission_service(
 KnowledgePermissionServiceDep = Annotated[
     KnowledgePermissionService, Depends(get_knowledge_permission_service)
 ]
+
+
+def get_knowledge_import_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KnowledgeImportService:
+    return build_knowledge_import_service(session)
+
+
+KnowledgeImportServiceDep = Annotated[KnowledgeImportService, Depends(get_knowledge_import_service)]
+
+
+# ── 导入（multipart） ─────────────────────────────
+
+
+@router.post(
+    "/api/v1/knowledge/import",
+    response_model=ImportTaskResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
+async def import_knowledge(
+    request: Request,
+    service: KnowledgeImportServiceDep,
+    user: CurrentUserDep,
+) -> ImportTaskResponse:
+    """multipart/form-data 接收 files（多文件），返回 202 + task_id + accepted + rejected。"""
+    form = await request.form()
+    uploads = form.getlist("files")
+    files_data: list[tuple[str, bytes]] = []
+    for up in uploads:
+        # up 可能是 UploadFile（来自 multipart）
+        if hasattr(up, "filename"):
+            content = await up.read()
+            files_data.append((up.filename or "unnamed", content))
+        else:
+            # 兜底：直接是字符串字段
+            files_data.append((str(up), b""))
+    return await service.import_files(files=files_data, user_id=user.id)
 
 
 # ── 知识单元 CRUD ─────────────────────────────
