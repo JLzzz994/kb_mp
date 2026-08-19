@@ -8,6 +8,7 @@ from app.api.routers.dashboard_router import router as dashboard_router
 from app.api.routers.health_router import router as health_router
 from app.api.routers.knowledge_router import router as knowledge_router
 from app.api.routers.org_router import router as org_router
+from app.api.routers.settlement_router import router as settlement_router
 from app.common.errors import AppError
 from app.infrastructure.lifespan import lifespan
 
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_router)
     app.include_router(ai_router)
     app.include_router(dashboard_router)
+    app.include_router(settlement_router)
     return app
 
 

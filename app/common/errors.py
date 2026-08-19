@@ -135,3 +135,14 @@ class InvalidPermissionConfigurationError(AppError):
 
     status_code = 422
     error_code = "invalid_permission_configuration"
+
+
+# ── M6 知识沉淀 ─────────────────────────────
+
+
+class FaqNotFoundError(ResourceNotFoundError):
+    error_code = "faq_not_found"
+
+
+class KnowledgeGapNotFoundError(ResourceNotFoundError):
+    error_code = "knowledge_gap_not_found"
