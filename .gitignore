@@ -8,3 +8,22 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
