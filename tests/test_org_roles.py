@@ -1,4 +1,6 @@
-"""角色管理端点测试（3 用例：list_includes_sys_admin / assign_validates_17_codes / assign_clears_user_bitmaps）。
+"""角色管理端点测试（3 用例）。
+
+> list_includes_sys_admin / assign_validates_17_codes / assign_clears_user_bitmaps
 
 > T03 ticket03 acceptance criteria 9 项。
 """
@@ -22,9 +24,7 @@ async def system_admin_role_id(db_session) -> int:
     from app.infrastructure.database import RoleRecord
 
     row = (
-        await db_session.execute(
-            select(RoleRecord).where(RoleRecord.role_code == "system_admin")
-        )
+        await db_session.execute(select(RoleRecord).where(RoleRecord.role_code == "system_admin"))
     ).scalar_one()
     return row.id
 
@@ -34,9 +34,7 @@ async def test_list_roles_includes_sys_admin_17_perms(
     async_client: AsyncClient, seeded_admin, admin_token
 ):
     """GET /api/v1/org/roles 返回 3 个角色；system_admin 含 17 码。"""
-    resp = await async_client.get(
-        "/api/v1/org/roles", headers=_auth(admin_token)
-    )
+    resp = await async_client.get("/api/v1/org/roles", headers=_auth(admin_token))
     assert resp.status_code == 200, resp.text
     roles = resp.json()
     assert len(roles) >= 1
@@ -65,7 +63,10 @@ async def test_assign_permissions_validates_17_codes(
 
 @pytest.mark.asyncio
 async def test_assign_permissions_clears_user_bitmaps(
-    async_client: AsyncClient, seeded_admin, admin_token, fake_redis,
+    async_client: AsyncClient,
+    seeded_admin,
+    admin_token,
+    fake_redis,
     system_admin_role_id,
 ):
     """权限变更后持有此 role 的用户 Redis auth:bitmap:{user_id} 被 DEL。"""

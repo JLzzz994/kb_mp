@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.infrastructure.jwt import JWTIssuer
 from app.common.errors import InvalidAccessTokenError
+from app.infrastructure.jwt import JWTIssuer
 
 
 class TestJWTIssuer:

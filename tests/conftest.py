@@ -42,12 +42,10 @@ from app.infrastructure.database import (  # noqa: E402
     RoleRecord,
     UserRecord,
     UserRoleRecord,
-    get_session_factory,
 )
 from app.infrastructure.jwt import JWTIssuer  # noqa: E402
 from app.infrastructure.password_hasher import PasswordHasher  # noqa: E402
 from app.infrastructure.redis_client import get_redis  # noqa: E402
-
 
 # ── 引擎与 Session（SQLite 内存） ─────────────────────────────
 
@@ -211,12 +209,12 @@ async def seeded_admin(db_session, fast_hasher):
     await db_session.flush()
 
     # 17 权限码
-    db_session.add_all([
-        RolePermissionRecord(
-            role_id=admin_role.id, permission_code=code, permission_type="api"
-        )
-        for code in ALL_PERMISSION_CODES
-    ])
+    db_session.add_all(
+        [
+            RolePermissionRecord(role_id=admin_role.id, permission_code=code, permission_type="api")
+            for code in ALL_PERMISSION_CODES
+        ]
+    )
 
     # admin 用户
     admin_user = UserRecord(

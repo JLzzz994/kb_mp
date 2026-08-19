@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
 class TestMe:
-    async def test_me_with_valid_token_returns_user_info(
-        self, async_client, admin_token
-    ):
+    async def test_me_with_valid_token_returns_user_info(self, async_client, admin_token):
         resp = await async_client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {admin_token}"},

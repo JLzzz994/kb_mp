@@ -8,7 +8,6 @@ from __future__ import annotations
 import io
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 
 
@@ -45,11 +44,15 @@ async def test_import_duplicate_content_rejected(
 ):
     """同一文件导入两次 → 第二次返回 duplicate_content。"""
     files = {"files": _txt_file("dup.txt", "Duplicate content test.\nA" * 100)}
-    r1 = await async_client.post("/api/v1/knowledge/import", files=files, headers=_auth(admin_token))
+    r1 = await async_client.post(
+        "/api/v1/knowledge/import", files=files, headers=_auth(admin_token)
+    )
     assert r1.status_code == 202
     assert r1.json()["accepted_count"] == 1
 
-    r2 = await async_client.post("/api/v1/knowledge/import", files=files, headers=_auth(admin_token))
+    r2 = await async_client.post(
+        "/api/v1/knowledge/import", files=files, headers=_auth(admin_token)
+    )
     assert r2.status_code == 202
     body = r2.json()
     assert body["accepted_count"] == 0
@@ -57,9 +60,7 @@ async def test_import_duplicate_content_rejected(
 
 
 @pytest.mark.asyncio
-async def test_import_unsupported_format(
-    async_client: AsyncClient, seeded_admin, admin_token
-):
+async def test_import_unsupported_format(async_client: AsyncClient, seeded_admin, admin_token):
     """不支持的格式 → rejected: unsupported_format。"""
     files = {"files": ("data.xlsx", io.BytesIO(b"fake xlsx content"), "application/vnd.ms-excel")}
     resp = await async_client.post(
@@ -153,9 +154,7 @@ async def test_import_creates_knowledge_unit_record(
     # DB 验证
     row = (
         await db_session.execute(
-            select(KnowledgeUnitRecord).where(
-                KnowledgeUnitRecord.source_file_name == "verify.txt"
-            )
+            select(KnowledgeUnitRecord).where(KnowledgeUnitRecord.source_file_name == "verify.txt")
         )
     ).scalar_one_or_none()
     assert row is not None

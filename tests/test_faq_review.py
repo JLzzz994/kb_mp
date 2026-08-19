@@ -39,9 +39,7 @@ async def pending_faq(db_session, seeded_admin) -> FaqRecord:
 
 
 @pytest.mark.asyncio
-async def test_faq_create_returns_201(
-    async_client: AsyncClient, seeded_admin, admin_token
-):
+async def test_faq_create_returns_201(async_client: AsyncClient, seeded_admin, admin_token):
     """POST /faqs → 201 + status=pending_review + question_hash。"""
     resp = await async_client.post(
         "/api/v1/faqs",
@@ -63,9 +61,7 @@ async def test_faq_list_recommendations_filters_pending(
     async_client: AsyncClient, seeded_admin, admin_token, pending_faq
 ):
     """recommendations 端点仅返回 status=pending_review。"""
-    resp = await async_client.get(
-        "/api/v1/faqs/recommendations", headers=_auth(admin_token)
-    )
+    resp = await async_client.get("/api/v1/faqs/recommendations", headers=_auth(admin_token))
     assert resp.status_code == 200
     items = resp.json()["items"]
     assert all(i["status"] == "pending_review" for i in items)
@@ -106,9 +102,7 @@ async def test_faq_review_approve_writes_redis_cache(
     # DB reviewer_id + reviewed_at
     async with factory() as session:
         row = (
-            await session.execute(
-                select(FaqRecord).where(FaqRecord.id == pending_faq.id)
-            )
+            await session.execute(select(FaqRecord).where(FaqRecord.id == pending_faq.id))
         ).scalar_one()
         assert row.reviewer_id is not None
         assert row.reviewed_at is not None
@@ -154,14 +148,10 @@ async def test_faq_review_rejects_duplicate_question(
         "question": "重复测试问题",
         "answer": "答案 1",
     }
-    r1 = await async_client.post(
-        "/api/v1/faqs", json=payload, headers=_auth(admin_token)
-    )
+    r1 = await async_client.post("/api/v1/faqs", json=payload, headers=_auth(admin_token))
     assert r1.status_code == 201
 
-    r2 = await async_client.post(
-        "/api/v1/faqs", json=payload, headers=_auth(admin_token)
-    )
+    r2 = await async_client.post("/api/v1/faqs", json=payload, headers=_auth(admin_token))
     assert r2.status_code == 409
     assert r2.json()["error_code"] == "username_conflict"
 
@@ -171,9 +161,7 @@ async def test_faq_requires_faq_read_permission(
     async_client: AsyncClient, seeded_admin, regular_user_token
 ):
     """regular_user 有 faq:read（4 权限码之一）→ 200。"""
-    resp = await async_client.get(
-        "/api/v1/faqs", headers=_auth(regular_user_token)
-    )
+    resp = await async_client.get("/api/v1/faqs", headers=_auth(regular_user_token))
     assert resp.status_code == 200
 
 
@@ -192,15 +180,11 @@ async def test_faq_review_requires_review_permission(
 
 
 @pytest.mark.asyncio
-async def test_faq_cache_get_validates_unit_version(
-    fake_redis, db_session, seeded_admin
-):
+async def test_faq_cache_get_validates_unit_version(fake_redis, db_session, seeded_admin):
     """单元版本变化时缓存自动失效。"""
+    from app.infrastructure.database import KnowledgeUnitRecord
     from app.repositories.faq_repository import FaqRepository
     from app.services.faq_cache_service import FaqCacheService
-    from datetime import datetime
-
-    from app.infrastructure.database import KnowledgeUnitRecord
     from app.services.knowledge_unit_service import _compute_content_hash, _gen_unit_code
 
     # 预置 unit

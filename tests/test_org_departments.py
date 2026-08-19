@@ -1,4 +1,6 @@
-"""部门管理端点测试（5 用例：tree / create / invalid_parent / delete_with_children / delete_with_members）。
+"""部门管理端点测试（5 用例）。
+
+> tree / create / invalid_parent / delete_with_children / delete_with_members
 
 > T02 实现要求（简报锁定决策）：
 > - GET 树 → dept:read；POST/PUT/DELETE → dept:write
@@ -86,9 +88,7 @@ async def test_create_department(async_client: AsyncClient, admin_token, root_de
 
 
 @pytest.mark.asyncio
-async def test_create_with_invalid_parent(
-    async_client: AsyncClient, admin_token, root_dept_id
-):
+async def test_create_with_invalid_parent(async_client: AsyncClient, admin_token, root_dept_id):
     """invalid_parent：parent_id 指向不存在的部门 → 404 department_not_found。"""
     headers = _auth(admin_token)
     resp = await async_client.post(
@@ -101,9 +101,7 @@ async def test_create_with_invalid_parent(
 
 
 @pytest.mark.asyncio
-async def test_delete_dept_with_children(
-    async_client: AsyncClient, admin_token, root_dept_id
-):
+async def test_delete_dept_with_children(async_client: AsyncClient, admin_token, root_dept_id):
     """delete_with_children：根部门有子部门时尝试删除 → 422 department_not_empty。"""
     headers = _auth(admin_token)
     # 创建子部门
@@ -115,21 +113,15 @@ async def test_delete_dept_with_children(
     assert child_resp.status_code == 201
 
     # 尝试删除根部门（有子部门）→ 422
-    resp = await async_client.delete(
-        f"/api/v1/org/departments/{root_dept_id}", headers=headers
-    )
+    resp = await async_client.delete(f"/api/v1/org/departments/{root_dept_id}", headers=headers)
     assert resp.status_code == 422
     assert resp.json()["error_code"] == "department_not_empty"
 
 
 @pytest.mark.asyncio
-async def test_delete_dept_with_members(
-    async_client: AsyncClient, admin_token, root_dept_id
-):
+async def test_delete_dept_with_members(async_client: AsyncClient, admin_token, root_dept_id):
     """delete_with_members：admin 所在的根部门有 1 个成员 → 删除应被保护。"""
     headers = _auth(admin_token)
-    resp = await async_client.delete(
-        f"/api/v1/org/departments/{root_dept_id}", headers=headers
-    )
+    resp = await async_client.delete(f"/api/v1/org/departments/{root_dept_id}", headers=headers)
     assert resp.status_code == 422
     assert resp.json()["error_code"] == "department_not_empty"

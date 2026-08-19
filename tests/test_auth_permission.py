@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi import APIRouter, Depends
-from httpx import AsyncClient
 
 from app.api.app import app as _app
 from app.api.dependencies import CurrentUserDep, require_permission
-
 
 # ── 模块级注册一次：测试路由 ─────────────────────────────
 _test_router = APIRouter(prefix="/api/v1/_perm_test")

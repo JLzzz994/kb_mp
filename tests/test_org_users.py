@@ -7,8 +7,8 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select as _select
 
-from app.infrastructure.database import DepartmentRecord, RoleRecord, RolePermissionRecord
-from app.domain.permission import ALL_PERMISSION_CODES, PermissionCode
+from app.domain.permission import PermissionCode
+from app.infrastructure.database import DepartmentRecord, RolePermissionRecord, RoleRecord
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -23,9 +23,7 @@ def _ensure_role_with_perms(db_session, role_code: str, role_name: str, perms: l
         from app.infrastructure.database import RoleRecord
 
         existing = (
-            await db_session.execute(
-                _select(RoleRecord).where(RoleRecord.role_code == role_code)
-            )
+            await db_session.execute(_select(RoleRecord).where(RoleRecord.role_code == role_code))
         ).scalar_one_or_none()
         if existing is None:
             rec = RoleRecord(role_name=role_name, role_code=role_code, description="test")
@@ -37,11 +35,11 @@ def _ensure_role_with_perms(db_session, role_code: str, role_name: str, perms: l
         # 重新写权限码
         from app.infrastructure.database import RolePermissionRecord as RP
 
-        await db_session.execute(
-            RP.__table__.delete().where(RP.role_id == rid)
-        )
+        await db_session.execute(RP.__table__.delete().where(RP.role_id == rid))
         for c in perms:
-            db_session.add(RolePermissionRecord(role_id=rid, permission_code=c, permission_type="api"))
+            db_session.add(
+                RolePermissionRecord(role_id=rid, permission_code=c, permission_type="api")
+            )
         await db_session.commit()
         return rid
 
@@ -50,8 +48,7 @@ def _ensure_role_with_perms(db_session, role_code: str, role_name: str, perms: l
 
 @pytest_asyncio.fixture
 async def known_role_ids(db_session, seeded_regular_user) -> dict[str, int]:
-    """已知角色 id。默认带 system_admin（来自 seeded_admin）+ regular_user（来自 seeded_regular_user）。
-    再额外创建 knowledge_admin 以满足测试用例。"""
+    """已知角色 id：sys_admin + regular_user（来自 seeded_*），外加 knowledge_admin。"""
     rows = (await db_session.execute(_select(RoleRecord))).scalars().all()
     code_to_id = {r.role_code: r.id for r in rows}
 
@@ -95,9 +92,7 @@ async def extra_dept_id(db_session) -> int:
 
 
 @pytest.mark.asyncio
-async def test_list_users_paginated(
-    async_client: AsyncClient, seeded_admin, admin_token
-):
+async def test_list_users_paginated(async_client: AsyncClient, seeded_admin, admin_token):
     """GET /api/v1/org/users 返回分页 + 含 department_name + role_codes。"""
     resp = await async_client.get(
         "/api/v1/org/users?page=1&page_size=10", headers=_auth(admin_token)
@@ -236,9 +231,7 @@ async def test_e2e_admin_full_flow(
     # 1. 登录（admin_token 已隐含通过 seeding + admin_token fixture）
 
     # 2. 部门树
-    tree_resp = await async_client.get(
-        "/api/v1/org/departments", headers=_auth(admin_token)
-    )
+    tree_resp = await async_client.get("/api/v1/org/departments", headers=_auth(admin_token))
     assert tree_resp.status_code == 200
     assert len(tree_resp.json()) >= 1
 

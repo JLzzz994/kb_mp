@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
-from app.domain.unit_permission import PermissionTarget
 from app.infrastructure.database import (
-    DepartmentRecord,
     KnowledgeUnitRecord,
     UnitPermissionRecord,
 )
@@ -40,9 +38,7 @@ async def sample_unit(db_session, seeded_admin) -> KnowledgeUnitRecord:
     db_session.add(unit)
     await db_session.flush()
     # 全局公开
-    db_session.add(
-        UnitPermissionRecord(unit_id=unit.id, target_type="global", target_id=None)
-    )
+    db_session.add(UnitPermissionRecord(unit_id=unit.id, target_type="global", target_id=None))
     await db_session.commit()
     return unit
 
@@ -133,12 +129,14 @@ async def test_configure_permissions_replace_all(
 
     # 2. 旧 global 行已被替换（不应有两条 global）
     perm_rows = (
-        await db_session.execute(
-            select(UnitPermissionRecord).where(
-                UnitPermissionRecord.unit_id == sample_unit.id
+        (
+            await db_session.execute(
+                select(UnitPermissionRecord).where(UnitPermissionRecord.unit_id == sample_unit.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     global_count = sum(1 for r in perm_rows if r.target_type == "global")
     assert global_count == 1
 
@@ -169,8 +167,13 @@ async def test_configure_permissions_rejects_multiple_globals(
 
 @pytest.mark.asyncio
 async def test_check_permissions_authorized_unauthorized_split(
-    async_client: AsyncClient, seeded_admin, seeded_regular_user, admin_token,
-    regular_user_token, fake_redis, sample_unit
+    async_client: AsyncClient,
+    seeded_admin,
+    seeded_regular_user,
+    admin_token,
+    regular_user_token,
+    fake_redis,
+    sample_unit,
 ):
     """global 公开 → admin / alice 都可访问（admin 通过权限码 knowledge:check 调端点）。"""
     # admin 登录写位图
@@ -178,10 +181,9 @@ async def test_check_permissions_authorized_unauthorized_split(
         "/api/v1/auth/login", json={"username": "admin", "password": "Admin@123"}
     )
     # alice 登录写位图（4 个权限码，不含 knowledge:check）
-    alice_login = await async_client.post(
+    await async_client.post(
         "/api/v1/auth/login", json={"username": "alice", "password": "Alice@123"}
     )
-    alice_token = alice_login.json()["access_token"]
 
     # admin 调 check-permissions：global 公开 → 1 个单元全可
     resp = await async_client.post(
@@ -199,16 +201,18 @@ async def test_check_permissions_authorized_unauthorized_split(
 
 
 @pytest.mark.asyncio
-async def test_compute_user_permission_bitmap_or_logic(
-    db_session, seeded_admin, admin_token
-):
+async def test_compute_user_permission_bitmap_or_logic(db_session, seeded_admin, admin_token):
     """纯函数 OR 逻辑：global / dept / role / user 任一匹配即放行。"""
+
     from app.domain.user import CurrentUser
-    from dataclasses import replace
 
     current = CurrentUser(
-        id=1, username="admin", display_name="admin",
-        department_id=1, dept_ids=[1, 2], role_ids=[10],
+        id=1,
+        username="admin",
+        display_name="admin",
+        department_id=1,
+        dept_ids=[1, 2],
+        role_ids=[10],
     )
 
     # global + dept(2匹配) + role(10匹配) + user(1匹配)
@@ -275,7 +279,7 @@ async def test_duplicate_content_via_unit_service(db_session, seeded_admin):
 
     svc = build_knowledge_unit_service(db_session)
     content = "Duplicate content for testing SHA-256 idempotency."
-    u1 = await svc.create(
+    await svc.create(
         title="First",
         content=content,
         summary=None,
@@ -311,11 +315,7 @@ async def test_splitter_protects_code_blocks():
     from app.infrastructure.splitter import Splitter
 
     s = Splitter()
-    text = (
-        "段落 1\n\n"
-        "```python\ndef f():\n    return 42\n```\n\n"
-        "段落 2 在代码块之后"
-    )
+    text = "段落 1\n\n```python\ndef f():\n    return 42\n```\n\n段落 2 在代码块之后"
     chunks = s.split(text)
     # 至少一个切片包含 ```python / ``` / def f()
     assert any("```python" in c.text and "def f()" in c.text for c in chunks)

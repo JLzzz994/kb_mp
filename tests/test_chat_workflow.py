@@ -6,7 +6,6 @@ import json
 import uuid
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -44,11 +43,11 @@ async def test_faq_cache_lookup_no_hit(db_session, seeded_admin, fake_redis):
 @pytest.mark.asyncio
 async def test_faq_cache_lookup_hit_sets_skip(db_session, seeded_admin, fake_redis):
     """预置 cache → 命中 + skip_generate=True。"""
+    import hashlib
+
     from app.workflows.context import GraphContext
     from app.workflows.nodes.faq_cache_lookup import faq_cache_lookup_node
     from app.workflows.state import ChatState
-
-    import hashlib
 
     qhash = hashlib.sha1("kb_mp 怎么用".lower().encode("utf-8")).hexdigest()
     await fake_redis.hset(
@@ -90,7 +89,7 @@ async def test_retrieve_node_returns_mock_citations(db_session):
 
 @pytest.mark.asyncio
 async def test_rerank_node_filters_by_cliff(db_session):
-    """rerank score 序列 [0.92, 0.85, 0.83, 0.5] → 0.83/0.85 = 0.97 > 0.75 保留；0.5/0.83 = 0.60 < 0.75 截断 → 保留 3 条。"""
+    """rerank cliff：[0.92,0.85,0.83,0.5] → 0.83/0.85=0.97>0.75 保留，0.5/0.83=0.60<0.75 截断。"""
     from app.workflows.context import GraphContext
     from app.workflows.nodes.rerank import rerank_node
     from app.workflows.state import ChatState
@@ -113,11 +112,10 @@ async def test_rerank_node_filters_by_cliff(db_session):
 @pytest.mark.asyncio
 async def test_permission_filter_splits_authorized(db_session, seeded_admin):
     """permission_filter 用 compute_user_permission_bitmap_sync 拆分。"""
+    from app.infrastructure.database import UnitPermissionRecord
     from app.workflows.context import GraphContext
     from app.workflows.nodes.permission_filter import permission_filter_node
     from app.workflows.state import ChatState
-
-    from app.infrastructure.database import UnitPermissionRecord
 
     # 在 unit 1 上加 global，全员可访问
     db_session.add(UnitPermissionRecord(unit_id=1, target_type="global", target_id=None))
@@ -162,7 +160,7 @@ async def test_interrupt_node_fires_low_confidence(db_session, fake_redis):
     assert out.get("should_interrupt") is True
     assert out["interrupt_reason"] == "low_confidence"
     # pending 写入 Redis
-    pending = await fake_redis.get(f"chat:pending:lowq")
+    pending = await fake_redis.get("chat:pending:lowq")
     assert pending is not None
 
 
@@ -178,7 +176,10 @@ async def test_assemble_prompt_includes_citations():
         "authorized_citations": [
             {"unit_id": 1, "title": "kb_mp", "score": 0.9, "content": "知识库管理平台"},
         ],
-        "history": [{"role": "user", "content": "你好"}, {"role": "assistant", "content": "你好！"}],
+        "history": [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "你好！"},
+        ],
     }
     ctx = GraphContext(redis=None, session_factory=lambda: None)
     out = await assemble_prompt_node(state, ctx)
@@ -269,9 +270,7 @@ async def test_chat_stream_emits_8_events(
         )
         db_session.add(unit)
         await db_session.flush()
-        db_session.add(
-            UnitPermissionRecord(unit_id=i, target_type="global", target_id=None)
-        )
+        db_session.add(UnitPermissionRecord(unit_id=i, target_type="global", target_id=None))
     await db_session.commit()
 
     payload = {
@@ -289,7 +288,9 @@ async def test_chat_stream_emits_8_events(
         body += chunk
     text = body.decode("utf-8")
     # 验收事件类型
-    events = [line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("event:")]
+    events = [
+        line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("event:")
+    ]
     assert "ready" in events
     assert "progress" in events
     assert "citation" in events
@@ -357,15 +358,11 @@ async def test_delete_session_returns_204(
         "/api/v1/ai/sessions", json={"title": "t"}, headers=_auth(admin_token)
     )
     sid = create.json()["id"]
-    resp = await async_client.delete(
-        f"/api/v1/ai/sessions/{sid}", headers=_auth(admin_token)
-    )
+    resp = await async_client.delete(f"/api/v1/ai/sessions/{sid}", headers=_auth(admin_token))
     assert resp.status_code == 204
     # DB 验证
     row = (
-        await db_session.execute(
-            select(ChatSessionRecord).where(ChatSessionRecord.id == sid)
-        )
+        await db_session.execute(select(ChatSessionRecord).where(ChatSessionRecord.id == sid))
     ).scalar_one_or_none()
     assert row is None
 

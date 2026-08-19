@@ -9,7 +9,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.infrastructure.database import KnowledgeGapRecord, KnowledgeUnitRecord
+from app.infrastructure.database import KnowledgeGapRecord
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -53,12 +53,14 @@ async def test_create_gap_when_top_scores_below_threshold(
     # DB 验证
     db_session.expire_all()
     row = (
-        await db_session.execute(
-            select(KnowledgeGapRecord).where(
-                KnowledgeGapRecord.question_pattern.like("kb_mp%")
+        (
+            await db_session.execute(
+                select(KnowledgeGapRecord).where(KnowledgeGapRecord.question_pattern.like("kb_mp%"))
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(row) >= 1
     assert any(g.status == "unresolved" for g in row)
 
@@ -98,9 +100,7 @@ async def test_list_gaps_ordered_by_ask_count(
     db_session.add(other)
     await db_session.commit()
 
-    resp = await async_client.get(
-        "/api/v1/knowledge-gaps", headers=_auth(admin_token)
-    )
+    resp = await async_client.get("/api/v1/knowledge-gaps", headers=_auth(admin_token))
     assert resp.status_code == 200
     items = resp.json()["items"]
     assert len(items) >= 2
@@ -117,11 +117,11 @@ async def test_one_click_create_unit_creates_and_resolves_gap(
     """POST /knowledge-gaps/{id}/create-unit → 创建 unit + 标记 gap resolved。"""
     from sqlalchemy import select as _sel
 
-    from app.infrastructure.database import KnowledgeGapRecord as KGR
-    from app.infrastructure.database import KnowledgeUnitRecord as KUR
-
     # 用 async_engine 直接查（绕过过期的 db_session）
     from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.infrastructure.database import KnowledgeGapRecord as KGR
+    from app.infrastructure.database import KnowledgeUnitRecord as KUR
 
     factory = async_sessionmaker(bind=async_engine, expire_on_commit=False)
 
@@ -142,19 +142,11 @@ async def test_one_click_create_unit_creates_and_resolves_gap(
 
     # 用新 session 验证（避免 fixture 过期）
     async with factory() as session:
-        unit = (
-            await session.execute(
-                _sel(KUR).where(KUR.id == body["unit_id"])
-            )
-        ).scalar_one()
+        unit = (await session.execute(_sel(KUR).where(KUR.id == body["unit_id"]))).scalar_one()
         assert unit.title == "kb_mp 部署指南"
         assert unit.category == "deployment"
 
-        gap = (
-            await session.execute(
-                _sel(KGR).where(KGR.id == unresolved_gap.id)
-            )
-        ).scalar_one()
+        gap = (await session.execute(_sel(KGR).where(KGR.id == unresolved_gap.id))).scalar_one()
         assert gap.status == "resolved"
         assert gap.resolved_unit_id == body["unit_id"]
 

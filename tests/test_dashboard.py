@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import random
 from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from app.infrastructure.database import (
     KnowledgeUnitRecord,
@@ -74,9 +72,7 @@ async def test_metrics_returns_5_indicators(
     async_client: AsyncClient, seeded_admin, admin_token, real_qa_setup
 ):
     """GET /dashboard/metrics → 5 项指标 + p95 + sample_count + unit_count。"""
-    resp = await async_client.get(
-        "/api/v1/dashboard/metrics?range=7", headers=_auth(admin_token)
-    )
+    resp = await async_client.get("/api/v1/dashboard/metrics?range=7", headers=_auth(admin_token))
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["access_count"] == 5
@@ -89,15 +85,11 @@ async def test_metrics_returns_5_indicators(
 
 
 @pytest.mark.asyncio
-async def test_metrics_range_validation(
-    async_client: AsyncClient, seeded_admin, admin_token
-):
+async def test_metrics_range_validation(async_client: AsyncClient, seeded_admin, admin_token):
     """range=999 → 422（VALID_RANGES 不含）；range=30 → 200。"""
     # range=999 会被 _validate_range 抛 ValueError → 500（演示期未映射错误码）
     # 先测 30 通过
-    r = await async_client.get(
-        "/api/v1/dashboard/metrics?range=30", headers=_auth(admin_token)
-    )
+    r = await async_client.get("/api/v1/dashboard/metrics?range=30", headers=_auth(admin_token))
     assert r.status_code == 200
 
 
@@ -173,21 +165,15 @@ async def test_dashboard_requires_dashboard_read_permission(
     async_client: AsyncClient, seeded_admin, regular_user_token
 ):
     """regular_user（4 权限码）没有 dashboard:read → 403。"""
-    resp = await async_client.get(
-        "/api/v1/dashboard/metrics", headers=_auth(regular_user_token)
-    )
+    resp = await async_client.get("/api/v1/dashboard/metrics", headers=_auth(regular_user_token))
     assert resp.status_code == 403
     assert resp.json()["error_code"] == "permission_denied"
 
 
 @pytest.mark.asyncio
-async def test_metrics_range_30_works(
-    async_client: AsyncClient, seeded_admin, admin_token
-):
+async def test_metrics_range_30_works(async_client: AsyncClient, seeded_admin, admin_token):
     """range=30 不报错 → 200（演示期无数据 → 全 0）。"""
-    resp = await async_client.get(
-        "/api/v1/dashboard/metrics?range=30", headers=_auth(admin_token)
-    )
+    resp = await async_client.get("/api/v1/dashboard/metrics?range=30", headers=_auth(admin_token))
     assert resp.status_code == 200
     body = resp.json()
     assert body["range_days"] == 30

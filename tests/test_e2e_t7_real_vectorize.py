@@ -8,12 +8,8 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 import pytest
 import pytest_asyncio
-
 
 # ── Mock 实现 ─────────────────────────────
 
@@ -152,13 +148,11 @@ async def real_services_app(fake_redis, async_engine):
     # 复刻 conftest 的 DB override（每请求新 session，与 async_engine 共享）
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from app.infrastructure.database import BaseORM
-
     factory = async_sessionmaker(bind=async_engine, expire_on_commit=False)
 
     async def _db():
-            async with factory() as s:
-                yield s
+        async with factory() as s:
+            yield s
 
     app.dependency_overrides[get_db] = _db
     app.dependency_overrides[RedisClient] = lambda: fake_redis
@@ -175,13 +169,13 @@ async def real_services_app(fake_redis, async_engine):
         app.include_router(r)
 
     yield {
-            "app": app,
-            "embedding": embedding,
-            "milvus": milvus,
-            "llm": llm,
-            "engine": async_engine,
-            "factory": factory,
-        }
+        "app": app,
+        "embedding": embedding,
+        "milvus": milvus,
+        "llm": llm,
+        "engine": async_engine,
+        "factory": factory,
+    }
 
     app.dependency_overrides.clear()
 
@@ -239,9 +233,7 @@ async def test_retrieve_uses_real_embedding_and_milvus(
         )
         session.add(unit)
         await session.flush()
-        session.add(
-            UnitPermissionRecord(unit_id=1, target_type="global", target_id=None)
-        )
+        session.add(UnitPermissionRecord(unit_id=1, target_type="global", target_id=None))
         await session.commit()
 
     # 2. 预置 Milvus 数据（admin 问 kb_mp 部署 → 命中 unit 1）
@@ -305,9 +297,7 @@ async def test_generate_uses_real_llm(
         )
         session.add(unit)
         await session.flush()
-        session.add(
-            UnitPermissionRecord(unit_id=2, target_type="global", target_id=None)
-        )
+        session.add(UnitPermissionRecord(unit_id=2, target_type="global", target_id=None))
         await session.commit()
 
     await real_services_app["milvus"].upsert(
@@ -341,7 +331,7 @@ async def test_import_triggers_real_vectorize_background_task(
     """import 端点 → 落库 → 后台 _vectorize_and_upsert → mock milvus.upsert 被调用。"""
     import io
 
-    body = "演示向量化内容 unit-xyz 测试".encode("utf-8")
+    body = "演示向量化内容 unit-xyz 测试".encode()
     files = {
         "files": (
             "test-vec.txt",
