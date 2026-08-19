@@ -187,6 +187,35 @@ class KnowledgeImportService:
 
             await self._session.commit()
             accepted_count += 1
+
+            # 7) 真实接入：触发后台 Milvus upsert（依赖注入到 app.state）
+            # 演示期：app.state.milvus 为 None → 仅记日志
+            try:
+                from app.api.app import get_app_state
+
+                app_state = get_app_state()
+                milvus = getattr(app_state, "milvus", None)
+                embedding = getattr(app_state, "embedding", None)
+                if milvus is not None and embedding is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        _vectorize_and_upsert(
+                            milvus=milvus,
+                            embedding=embedding,
+                            session_factory=self._session_factory,
+                            unit_id=record.id,
+                            content=raw_text,
+                            title=title,
+                            category=file_ext,
+                        )
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "import.background_trigger.failed unit_id={} error={}",
+                    record.id,
+                    exc,
+                )
             logger.info(
                 "knowledge.import unit_id={} filename={} chunks={}",
                 record.id,
@@ -207,3 +236,65 @@ def build_knowledge_import_service(
     parser_factory: ParserFactory | None = None,
 ) -> KnowledgeImportService:
     return KnowledgeImportService(session, parser_factory)
+
+
+# ── 后台异步向量化（真实接入：本地 BGE + 远程 Milvus） ─────────────────────────────
+
+
+async def _vectorize_and_upsert(
+    *,
+    milvus,
+    embedding,
+    session_factory,
+    unit_id: int,
+    content: str,
+    title: str,
+    category: str | None,
+) -> None:
+    """后台任务：embed content → Milvus upsert；失败时 mark status=vector_pending。
+
+    依赖通过闭包传入（避免 import cycle + lifespan 解耦）。
+    失败仅记日志，不阻断用户响应。
+    """
+    try:
+        # 1. 真实向量化
+        vec = await embedding.embed(content)
+
+        # 2. 真实 upsert
+        await milvus.upsert(
+            unit_id=unit_id,
+            embedding=vec,
+            title=title,
+            content=content,
+            category=category,
+        )
+        logger.info(
+            "import.vectorize.upsert.success unit_id={} dim={}",
+            unit_id,
+            len(vec),
+        )
+    except Exception as exc:
+        # 3. 失败：标记 status=vector_pending
+        logger.error(
+            "import.vectorize.failed unit_id={} error={}",
+            unit_id,
+            exc,
+        )
+        try:
+            from sqlalchemy import update
+
+            from app.infrastructure.database import KnowledgeUnitRecord
+
+            async with session_factory() as session:
+                await session.execute(
+                    update(KnowledgeUnitRecord)
+                    .where(KnowledgeUnitRecord.id == unit_id)
+                    .values(status="vector_pending")
+                )
+                await session.commit()
+        except Exception as inner_exc:
+            logger.error(
+                "import.vectorize.status_update.failed unit_id={} error={}",
+                unit_id,
+                inner_exc,
+            )

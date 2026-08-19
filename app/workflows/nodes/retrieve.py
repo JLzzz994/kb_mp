@@ -1,18 +1,23 @@
 """retrieve 节点：从 Milvus 检索 Top-20。
 
-> 演示期：若 Milvus 不可用，返回空 citations（继续到 rerank → 触发 interrupt）。
-> 真实生产：ctx.milvus.search(query_embedding, top_k=20)。
+> 真实路径（部署 / 演示期有真实服务）：ctx.embedding + ctx.milvus 都可用 → 真实检索
+> 演示期 mock 分支：服务不可用 → 返回 2 条 mock citations（向后兼容 87 用例）
+> 失败降级：检索 IO 异常 → 走 mock 路径（不阻断用户）
 """
 
 from __future__ import annotations
 
+import logging
+
 from app.workflows.context import GraphContext
 from app.workflows.state import ChatState
 
+logger = logging.getLogger(__name__)
+
 
 async def retrieve_node(state: ChatState, ctx: GraphContext) -> ChatState:
-    if ctx.milvus is None:
-        # 演示期：模拟 Top-3 召回
+    if ctx.embedding is None or ctx.milvus is None:
+        # 演示期：服务不可用 → mock Top-3 召回
         state["retrieved_citations"] = [
             {
                 "unit_id": 1,
@@ -29,21 +34,23 @@ async def retrieve_node(state: ChatState, ctx: GraphContext) -> ChatState:
         ]
         return state
 
-    # 真实路径（Milvus 可用）
-    if ctx.embedding is None:
+    # 真实路径：embed → Milvus ANN 检索
+    try:
+        query_embedding = await ctx.embedding.embed(state["question"])
+        rows = await ctx.milvus.search(query_embedding, top_k=20)
+        state["retrieved_citations"] = [
+            {
+                "unit_id": int(r["unit_id"]),
+                "title": str(r.get("title", "")),
+                "score": float(r.get("score", 0.0)),
+                "content": str(r.get("content", "")),
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        logger.error("retrieve_node.failed error={}", exc)
+        # 失败降级：返回空列表（rerank 后触发 interrupt）
         state["retrieved_citations"] = []
-        return state
-    embedding = await ctx.embedding.embed(state["question"])
-    rows = await ctx.milvus.search(embedding, top_k=20)
-    state["retrieved_citations"] = [
-        {
-            "unit_id": r["unit_id"],
-            "title": r.get("title", ""),
-            "score": float(r.get("score", 0.0)),
-            "content": r.get("content", ""),
-        }
-        for r in rows
-    ]
     return state
 
 

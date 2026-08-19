@@ -24,11 +24,21 @@ def _sse_event(event: str, data: dict | str) -> str:
 
 
 class AIService:
-    def __init__(self, session: AsyncSession, redis: RedisClient) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        redis: RedisClient,
+        app_state: object | None = None,
+    ) -> None:
         self._session = session
         self._redis = redis
         # 复用入参 session 所属的 factory（测试可注入 sql_session_factory）
         self._session_factory = lambda: session
+        # 真实服务：embedding / rerank / milvus / llm（lifespan 注入到 app.state）
+        self._app_state = (
+            app_state
+            or type("_Stub", (), {"embedding": None, "rerank": None, "milvus": None, "llm": None})()
+        )
 
     async def _load_user_context(self, user: CurrentUser) -> dict:
         """从 user 提取 dept_ids / role_ids / permissions。"""
@@ -115,6 +125,11 @@ class AIService:
         ctx = GraphContext(
             redis=self._redis,
             session_factory=self._session_factory,
+            # 从 FastAPI app.state 注入真实服务（lifespan 阶段已设置）
+            embedding=getattr(self._app_state, "embedding", None),
+            rerank=getattr(self._app_state, "rerank", None),
+            milvus=getattr(self._app_state, "milvus", None),
+            llm=getattr(self._app_state, "llm", None),
         )
 
         # ── ready 事件 ─────────────────────────────
@@ -188,8 +203,12 @@ class AIService:
         return self._session
 
 
-def build_ai_service(session: AsyncSession, redis: RedisClient) -> AIService:
-    return AIService(session, redis)
+def build_ai_service(
+    session: AsyncSession,
+    redis: RedisClient,
+    app_state: object | None = None,
+) -> AIService:
+    return AIService(session, redis, app_state=app_state)
 
 
 __all__ = ["AIService", "build_ai_service"]

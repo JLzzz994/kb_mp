@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,10 +29,11 @@ router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
 
 def get_ai_service(
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[RedisClient, Depends(get_redis)],
 ) -> AIService:
-    return build_ai_service(session, redis)
+    return build_ai_service(session, redis, app_state=request.app.state)
 
 
 AIServiceDep = Annotated[AIService, Depends(get_ai_service)]

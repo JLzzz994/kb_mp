@@ -36,3 +36,12 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def get_app_state() -> object:
+    """暴露 app.state 给后台任务（BackgroundTasks / asyncio.create_task）。
+
+    背景：M3.5 import 完成后 asyncio.create_task 触发 Milvus upsert，
+    该任务脱离 FastAPI 的 Request 上下文，需通过此函数读取 app.state。
+    """
+    return app.state
