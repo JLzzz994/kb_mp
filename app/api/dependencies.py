@@ -1,7 +1,7 @@
 """FastAPI 依赖注入：DB Session / CurrentUser / require_permission 工厂。
 
-> PR0 阶段仅提供占位 + CurrentUser 框架；具体 AuthService 实现留给 T01。
-> T01 完成后会扩展此文件加载完整 CurrentUser（dept_ids + permissions）。
+> T01：AuthService 已就绪，get_current_user 走真实链路。
+> 剩余服务 Depends 占位留待 T02+ 替换。
 """
 
 from __future__ import annotations
@@ -11,14 +11,17 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import (
     AuthenticationError,
     PermissionDeniedError,
 )
 from app.domain.user import CurrentUser
+from app.infrastructure.database import get_db
 from app.infrastructure.jwt import JWTIssuer, get_jwt_issuer
 from app.infrastructure.redis_client import RedisClient, get_redis
+from app.services.auth_service import build_auth_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -27,41 +30,31 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     jwt_issuer: Annotated[JWTIssuer, Depends(get_jwt_issuer)],
     redis: Annotated[RedisClient, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> CurrentUser:
-    """FastAPI 依赖：解析 Authorization: Bearer，校验 JWT + 加载鉴权位图。
+    """FastAPI 依赖：解析 Authorization Bearer，校验 JWT + 加载完整 CurrentUser。
 
     流程：
-    1. 检查 Bearer 头缺失 → AuthenticationError(401)
-    2. jwt_issuer.verify() → TokenPayload；签名/过期失败 → InvalidAccessTokenError(401)
-    3. Redis 鉴权位图查询 → permissions（缺失则空列表，触发 RBAC 拦截）
-    4. 组装 CurrentUser 返回
+    1. Bearer 头缺失 → AuthenticationError(401)
+    2. jwt_issuer.verify() 失败 → InvalidAccessTokenError(401)
+    3. AuthService.load_current_user 加载部门链/角色码/部门名
+    4. Redis 鉴权位图查询 → permissions（缺失则空列表，触发 RBAC 拦截）
+    5. 返回 CurrentUser
     """
     if credentials is None:
         raise AuthenticationError("missing bearer token")
-    payload = jwt_issuer.verify(credentials.credentials)  # raises InvalidAccessTokenError
-    user_id = int(payload.sub)
-    permissions = await redis.get_bitmap(user_id) or []
-
-    return CurrentUser(
-        id=user_id,
-        username=payload.username,
-        display_name="",  # 由 AuthService.load_current_user 补全
-        department_id=0,
-        role_codes=payload.role_codes,
-        permissions=permissions,
-        dept_ids=[],
-    )
+    payload = jwt_issuer.verify(credentials.credentials)
+    service = build_auth_service(session, jwt_issuer=jwt_issuer, redis=redis)
+    current = await service.load_current_user(int(payload.sub))
+    current.permissions = await redis.get_bitmap(current.id) or []
+    return current
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 def require_permission(*codes: str) -> Callable:
-    """工厂：生成 FastAPI 依赖，校验 CurrentUser 是否含 codes 任一权限码。
-
-    用法：
-        @router.get("/api/v1/users", dependencies=[require_permission("user:read")])
-    """
+    """工厂：生成 FastAPI 依赖，校验 CurrentUser 是否含 codes 任一权限码。"""
 
     async def checker(user: CurrentUserDep) -> None:
         if not any(code in user.permissions for code in codes):
@@ -70,7 +63,7 @@ def require_permission(*codes: str) -> Callable:
     return Depends(checker)
 
 
-# ── Service Depends 占位（PR0 阶段留空，T01+ 实现） ─────────────────────────────
+# ── 兼容占位（PR0 留下的 type alias，供后续模块平滑切换） ─────────────────────────────
 
 # 鉴权
 AuthServiceDep = Annotated[None, Depends(lambda: None)]  # placeholder
@@ -93,9 +86,6 @@ DashboardServiceDep = Annotated[None, Depends(lambda: None)]
 # 知识沉淀（M6）
 FaqServiceDep = Annotated[None, Depends(lambda: None)]
 KnowledgeGapServiceDep = Annotated[None, Depends(lambda: None)]
-
-
-# ── 导出 HTTPException 供其他模块复用 ─────────────────────────────
 
 
 def http_error_from_app_error(exc: Exception) -> HTTPException:

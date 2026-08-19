@@ -1,17 +1,27 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
+from app.api.dependencies import http_error_from_app_error
+from app.api.routers.auth_router import router as auth_router
 from app.api.routers.health_router import router as health_router
+from app.common.errors import AppError
 from app.infrastructure.lifespan import lifespan
 
 
 def create_app() -> FastAPI:
-    """工厂函数：便于测试构造隔离实例。"""
     app = FastAPI(
         title="kb-mp API",
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(AppError)
+    async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+        http_exc = http_error_from_app_error(exc)
+        return JSONResponse(status_code=http_exc.status_code, content=http_exc.detail)
+
     app.include_router(health_router)
+    app.include_router(auth_router)
     return app
 
 

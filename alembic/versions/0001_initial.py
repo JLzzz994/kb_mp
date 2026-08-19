@@ -26,7 +26,7 @@ def upgrade() -> None:
 
     op.create_table(
         "departments",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("parent_id", sa.BigInteger, sa.ForeignKey("departments.id"), nullable=True),
         sa.Column("name", sa.String(64), nullable=False),
         sa.Column("leader_id", sa.BigInteger, sa.ForeignKey("users.id"), nullable=True),
@@ -48,7 +48,7 @@ def upgrade() -> None:
 
     op.create_table(
         "users",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("username", sa.String(64), nullable=False, unique=True),
         sa.Column("password_hash", sa.String(255), nullable=False),
         sa.Column("display_name", sa.String(64), nullable=False),
@@ -70,7 +70,7 @@ def upgrade() -> None:
 
     op.create_table(
         "roles",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("role_name", sa.String(64), nullable=False),
         sa.Column("role_code", sa.String(64), nullable=False, unique=True),
         sa.Column("description", sa.String(255), nullable=True),
@@ -89,7 +89,7 @@ def upgrade() -> None:
 
     op.create_table(
         "user_roles",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column(
             "user_id",
             sa.BigInteger,
@@ -112,7 +112,7 @@ def upgrade() -> None:
 
     op.create_table(
         "role_permissions",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column(
             "role_id",
             sa.BigInteger,
@@ -135,7 +135,7 @@ def upgrade() -> None:
 
     op.create_table(
         "knowledge_units",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("unit_code", sa.String(32), nullable=False, unique=True),
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("content", MEDIUMTEXT, nullable=False),
@@ -165,7 +165,7 @@ def upgrade() -> None:
 
     op.create_table(
         "unit_permissions",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column(
             "unit_id",
             sa.BigInteger,
@@ -195,7 +195,7 @@ def upgrade() -> None:
 
     op.create_table(
         "qa_access_logs",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("session_id", sa.String(64), nullable=False),
         sa.Column("user_id", sa.BigInteger, sa.ForeignKey("users.id"), nullable=False),
         sa.Column("question", sa.Text, nullable=False),
@@ -252,7 +252,7 @@ def upgrade() -> None:
 
     op.create_table(
         "faqs",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("question", sa.Text, nullable=False),
         sa.Column("question_hash", sa.String(40), nullable=False, unique=True),
         sa.Column("answer", MEDIUMTEXT, nullable=False),
@@ -278,13 +278,13 @@ def upgrade() -> None:
         mysql_charset="utf8mb4",
         mysql_collate="utf8mb4_unicode_ci",
     )
-    op.create_index("idx_status", "faqs", ["status"])
-    op.create_index("idx_source", "faqs", ["source_type"])
+    op.create_index("idx_status_faq", "faqs", ["status"])
+    op.create_index("idx_source_faq", "faqs", ["source_type"])
     op.create_index("idx_related_unit", "faqs", ["related_unit_id"])
 
     op.create_table(
         "knowledge_gaps",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("question_pattern", sa.String(255), nullable=False),
         sa.Column("question_pattern_hash", sa.String(40), nullable=False, unique=True),
         sa.Column("sample_questions_json", sa.JSON, nullable=False),

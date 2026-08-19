@@ -53,7 +53,7 @@ class UserRecord(BaseORM):
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -79,7 +79,7 @@ class DepartmentRecord(BaseORM):
 
     __tablename__ = "departments"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     parent_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("departments.id"), nullable=True
     )
@@ -107,7 +107,7 @@ class RoleRecord(BaseORM):
 
     __tablename__ = "roles"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_name: Mapped[str] = mapped_column(String(64), nullable=False)
     role_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -127,7 +127,7 @@ class UserRoleRecord(BaseORM):
 
     __tablename__ = "user_roles"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -149,7 +149,7 @@ class RolePermissionRecord(BaseORM):
 
     __tablename__ = "role_permissions"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
     )
@@ -175,7 +175,7 @@ class KnowledgeUnitRecord(BaseORM):
 
     __tablename__ = "knowledge_units"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     unit_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
@@ -209,7 +209,7 @@ class UnitPermissionRecord(BaseORM):
 
     __tablename__ = "unit_permissions"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     unit_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("knowledge_units.id", ondelete="CASCADE"),
@@ -244,7 +244,7 @@ class QaAccessLogRecord(BaseORM):
 
     __tablename__ = "qa_access_logs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64), nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
@@ -308,7 +308,7 @@ class FaqRecord(BaseORM):
 
     __tablename__ = "faqs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     question_hash: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     answer: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
@@ -335,8 +335,8 @@ class FaqRecord(BaseORM):
     )
 
     __table_args__ = (
-        Index("idx_status", "status"),
-        Index("idx_source", "source_type"),
+        Index("idx_status_faq", "status"),
+        Index("idx_source_faq", "source_type"),
         Index("idx_related_unit", "related_unit_id"),
     )
 
@@ -346,7 +346,7 @@ class KnowledgeGapRecord(BaseORM):
 
     __tablename__ = "knowledge_gaps"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     question_pattern: Mapped[str] = mapped_column(String(255), nullable=False)
     question_pattern_hash: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     sample_questions_json: Mapped[list] = mapped_column(JSON, nullable=False)
@@ -369,7 +369,7 @@ class KnowledgeGapRecord(BaseORM):
     )
 
     __table_args__ = (
-        Index("idx_status", "status"),
+        Index("idx_status_gap", "status"),
         Index("idx_last_asked", "last_asked_at"),
         Index("idx_resolved_unit", "resolved_unit_id"),
     )
