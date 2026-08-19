@@ -58,7 +58,7 @@ class UserRecord(BaseORM):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
     department_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("departments.id"), nullable=False
+        Integer, ForeignKey("departments.id"), nullable=False
     )
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
@@ -81,10 +81,10 @@ class DepartmentRecord(BaseORM):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     parent_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("departments.id"), nullable=True
+        Integer, ForeignKey("departments.id"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
-    leader_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    leader_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -129,10 +129,10 @@ class UserRoleRecord(BaseORM):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     role_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -151,7 +151,7 @@ class RolePermissionRecord(BaseORM):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     role_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
     )
     permission_code: Mapped[str] = mapped_column(String(64), nullable=False)
     permission_type: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -186,7 +186,7 @@ class KnowledgeUnitRecord(BaseORM):
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
-    creator_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    creator_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
@@ -246,7 +246,7 @@ class QaAccessLogRecord(BaseORM):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str | None] = mapped_column(MEDIUMTEXT, nullable=True)
     recalled_unit_ids_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -314,14 +314,14 @@ class FaqRecord(BaseORM):
     answer: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     related_unit_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("knowledge_units.id"), nullable=True
+        Integer, ForeignKey("knowledge_units.id"), nullable=True
     )
     unit_updated_at_snapshot: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending_review")
     hit_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     reviewer_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=True
+        Integer, ForeignKey("users.id"), nullable=True
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -356,7 +356,7 @@ class KnowledgeGapRecord(BaseORM):
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="unresolved")
     resolved_unit_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("knowledge_units.id"), nullable=True
+        Integer, ForeignKey("knowledge_units.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()

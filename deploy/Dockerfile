@@ -29,9 +29,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # 复制代码
 COPY app/ ./app/
 COPY main.py ./
-COPY alembic.ini ./alembic.ini 2>/dev/null || true
-COPY alembic/ ./alembic/ 2>/dev/null || true
-COPY scripts/ ./scripts/ 2>/dev/null || true
+COPY alembic.ini ./alembic.ini
+COPY alembic/ ./alembic/
+COPY scripts/ ./scripts/
 
 # 静态文件 / 数据挂载点
 RUN mkdir -p /app/storage/uploads
