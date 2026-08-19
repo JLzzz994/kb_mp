@@ -1,12 +1,14 @@
 """Redis 客户端抽象：鉴权位图 + 通用 KV。
 
 > **职责分层**（Phase 4 low 修复，IMPL-M3 §7 与 IMPL-M1 §2.4 对齐）：
-> - 鉴权位图专用方法：`set_bitmap / get_bitmap / del_bitmap`（封装 key=`auth:bitmap:{user_id}` 与 TTL）
-> - 通用 KV 方法：`set / get / delete`（供 FAQ 缓存、临时键等非位图场景使用）
+> - 鉴权位图专用方法：set_bitmap / get_bitmap / del_bitmap
+>   （封装 key=`auth:bitmap:{user_id}` 与 TTL）
+> - 通用 KV 方法：set / get / delete（供 FAQ 缓存、临时键等非位图场景使用）
 >
 > 这样上层 Service（AuthService / KnowledgePermissionService）只需调用语义化方法，
 > 不再自己拼接 Redis key 字符串，避免 Phase 1-2 期间出现的 key 漂移 bug（C1 教训）。
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +17,6 @@ from typing import Any
 import redis.asyncio as redis_async
 
 from app.config.settings import settings
-
 
 AUTH_BITMAP_KEY_PREFIX = "auth:bitmap:"
 AUTH_BITMAP_NAMESPACE = "auth:bitmap"
@@ -114,6 +115,14 @@ class RedisClient:
     async def exists(self, key: str) -> bool:
         """通用 EXISTS。"""
         return bool(await self._client.exists(key))
+
+    async def ping(self) -> bool:
+        """PING 健康检查（lifespan fast-fail 用）。"""
+        return bool(await self._client.ping())
+
+    async def aclose(self) -> None:
+        """关闭底层连接池（lifespan 关闭阶段调用）。"""
+        await self._client.aclose()
 
     # ===== 哈希（FAQ 缓存 HSET/HGETALL/DEL 用） =====
 
