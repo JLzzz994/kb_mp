@@ -100,3 +100,38 @@ class InvalidPermissionCodeError(AppError):
 
     status_code = 422
     error_code = "invalid_permission_code"
+
+
+# ── M3 知识资产管理 ─────────────────────────────
+
+
+class KnowledgeUnitNotFoundError(ResourceNotFoundError):
+    error_code = "knowledge_unit_not_found"
+
+
+class DuplicateContentError(AppError):
+    """SHA-256 重复内容拒绝导入。"""
+
+    status_code = 409
+    error_code = "duplicate_content"
+
+
+class FileSizeExceededError(AppError):
+    """单文件超过 max_upload_size_mb（默认 20MB）。"""
+
+    status_code = 413
+    error_code = "file_size_exceeded"
+
+
+class UnsupportedFileFormatError(AppError):
+    """不支持的文件格式（仅 pdf/md/docx/txt）。"""
+
+    status_code = 415
+    error_code = "unsupported_format"
+
+
+class InvalidPermissionConfigurationError(AppError):
+    """权限配置为空或非法（如多条 global）。"""
+
+    status_code = 422
+    error_code = "invalid_permission_configuration"

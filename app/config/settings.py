@@ -38,10 +38,20 @@ class Settings(BaseSettings):
     # ── bcrypt（锁定决策 Q2） ─────────────────────────────
     bcrypt_cost: int = 12
 
-    # ── LLM（占位，PR0 不启用） ─────────────────────────────
+    # ── LLM / Embedding（M3 / M4 使用） ─────────────────────────────
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_model: str = "gpt-4o-mini"
+    embedding_model: str = "text-embedding-3-small"
+
+    # ── Milvus（M3 使用） ─────────────────────────────
+    milvus_host: str = "localhost"
+    milvus_port: int = 19530
+
+    # ── 文件存储（M3 使用） ─────────────────────────────
+    storage_dir: str = "./storage/uploads"
+    max_upload_size_mb: int = 20
+    max_total_upload_size_mb: int = 200
 
 
 settings = Settings()
