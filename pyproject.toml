@@ -36,7 +36,7 @@ mysql = ["sqlalchemy==2.0.50", "aiomysql==0.3.2"]
 dev = [
     "pytest==9.0.3",
     "pytest-asyncio==1.4.0",
-    "ruff==0.16.0",
+    "ruff==0.16.4",
 ]
 
 [tool.ruff]
