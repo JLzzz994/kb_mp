@@ -111,20 +111,34 @@ async def test_rerank_node_filters_by_cliff(db_session):
 
 @pytest.mark.asyncio
 async def test_permission_filter_splits_authorized(db_session, seeded_admin):
-    """permission_filter 用 compute_user_permission_bitmap_sync 拆分。"""
-    from app.infrastructure.database import UnitPermissionRecord
+    """只对 active unit 做鉴权；孤儿向量/不存在 unit 静默丢弃。"""
+    from app.infrastructure.database import KnowledgeUnitRecord, UnitPermissionRecord
+    from app.services.knowledge_unit_service import _compute_content_hash, _gen_unit_code
     from app.workflows.context import GraphContext
     from app.workflows.nodes.permission_filter import permission_filter_node
     from app.workflows.state import ChatState
 
-    # 在 unit 1 上加 global，全员可访问
+    for unit_id in (1, 2):
+        content = f"permission test {unit_id}"
+        db_session.add(
+            KnowledgeUnitRecord(
+                id=unit_id,
+                unit_code=_gen_unit_code(),
+                title=f"Unit {unit_id}",
+                content=content,
+                content_hash=_compute_content_hash(content),
+                status="active",
+                creator_id=seeded_admin["user_id"],
+            )
+        )
     db_session.add(UnitPermissionRecord(unit_id=1, target_type="global", target_id=None))
     await db_session.commit()
 
     state: ChatState = {
         "reranked_citations": [
             {"unit_id": 1, "score": 0.9, "title": "A", "content": "x"},
-            {"unit_id": 999, "score": 0.8, "title": "B", "content": "y"},  # 鉴权失败
+            {"unit_id": 2, "score": 0.8, "title": "B", "content": "y"},
+            {"unit_id": 999, "score": 0.7, "title": "orphan", "content": "z"},
         ],
         "user_id": 1,
         "user_dept_ids": [],
@@ -133,9 +147,8 @@ async def test_permission_filter_splits_authorized(db_session, seeded_admin):
     }
     ctx = GraphContext(redis=None, session_factory=lambda: db_session)
     out = await permission_filter_node(state, ctx)
-    assert len(out["authorized_citations"]) == 1
-    assert out["authorized_citations"][0]["unit_id"] == 1
-    assert 999 in out["unauthorized_unit_ids"]
+    assert [c["unit_id"] for c in out["authorized_citations"]] == [1]
+    assert out["unauthorized_unit_ids"] == [2]
 
 
 @pytest.mark.asyncio
