@@ -14,7 +14,7 @@ from app.api.schemas.knowledge_import_schema import ImportRejectedItem, ImportTa
 from app.common.errors import FileSizeExceededError
 from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument, StructuredChunk
-from app.infrastructure.file_storage import save_upload
+from app.infrastructure.file_storage import persist_unit_source, remove_file, save_upload
 from app.infrastructure.parser_factory import (
     ParserFactory,
     UnsupportedFormatError,
@@ -112,6 +112,7 @@ class KnowledgeImportService:
             try:
                 document = self._parse_document(saved_path)
             except UnsupportedFormatError:
+                remove_file(saved_path)
                 rejected.append(
                     ImportRejectedItem(
                         filename=filename,
@@ -120,22 +121,26 @@ class KnowledgeImportService:
                 )
                 continue
             except ParseError as exc:
+                remove_file(saved_path)
                 logger.warning("import.parse.failed filename={} error={}", filename, exc)
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
             except Exception as exc:
+                remove_file(saved_path)
                 logger.error("import.parse.unexpected filename={} error={}", filename, exc)
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
 
             raw_text = document.text.strip()
             if not raw_text:
+                remove_file(saved_path)
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
 
             content_hash = _compute_content_hash(raw_text)
             existing = await self._unit_repo.find_by_content_hash(content_hash)
             if existing is not None:
+                remove_file(saved_path)
                 rejected.append(
                     ImportRejectedItem(
                         filename=filename,
@@ -169,10 +174,25 @@ class KnowledgeImportService:
                 await self._unit_repo.create(record)
                 await self._session.commit()
             except Exception as exc:
+                remove_file(saved_path)
                 logger.error("import.db_insert.failed filename={} error={}", filename, exc)
                 await self._session.rollback()
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
+
+            try:
+                archived_path = persist_unit_source(saved_path, record.unit_code)
+                logger.info(
+                    "knowledge.import.source_archived unit_id={} path={}",
+                    record.id,
+                    archived_path,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "knowledge.import.source_archive.failed unit_id={} error={}",
+                    record.id,
+                    exc,
+                )
 
             accepted_count += 1
             self._trigger_vectorization(
