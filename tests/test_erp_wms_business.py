@@ -18,6 +18,6 @@ def test_high_risk_guardrail_is_in_prompt() -> None:
 def test_demo_citations_are_business_specific() -> None:
     citations = demo_citations("订单审核失败怎么排查？")
     assert len(citations) == 2
-    assert citations[0]["unit_id"] == 1001
+    assert citations[0]["unit_id"] == 1
     assert "订单履约" in citations[0]["title"]
     assert citations[0]["score"] > citations[1]["score"]
