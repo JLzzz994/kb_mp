@@ -137,6 +137,13 @@ class InvalidPermissionConfigurationError(AppError):
     error_code = "invalid_permission_configuration"
 
 
+class KnowledgeIndexSyncError(AppError):
+    """MySQL 知识内容已保存，但向量索引同步失败，需要重试。"""
+
+    status_code = 503
+    error_code = "knowledge_index_sync_failed"
+
+
 # ── M6 知识沉淀 ─────────────────────────────
 
 
