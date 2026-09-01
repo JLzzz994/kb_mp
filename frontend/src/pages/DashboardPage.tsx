@@ -74,7 +74,7 @@ export default function DashboardPage() {
   const metricCards = [
     { label: "访问次数", value: formatNumber(metrics.access_count), icon: Eye, hint: `近 ${metrics.range_days} 天` },
     { label: "独立用户（UV）", value: formatNumber(metrics.unique_users), icon: Activity, hint: `近 ${metrics.range_days} 天` },
-    { label: "知识单元数", value: formatNumber(metrics.unit_count), icon: FileText, hint: "active 状态" },
+    { label: "产品知识单元", value: formatNumber(metrics.unit_count), icon: FileText, hint: "active 状态" },
     { label: "Token 总量", value: formatTokens(metrics.total_tokens), icon: Coins, hint: `近 ${metrics.range_days} 天` },
     { label: "平均响应时间", value: formatMs(metrics.avg_response_time_ms), icon: Timer, hint: "端到端" },
   ];
@@ -82,8 +82,8 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-up">
       <PageHeader
-        title="数据看板"
-        description="平台的知识资产、AI 使用与鉴权运行是否健康。"
+        title="知识运营看板"
+        description="观察 ERP/WMS 产品知识资产、AI 问答、权限与知识运营是否健康。"
         actions={
           <Tabs value={range} onValueChange={(v) => setRange(v as StatsRange)}>
             <TabsList aria-label="时间范围">
