@@ -35,6 +35,10 @@ from app.repositories.knowledge_unit_repository import (
     KnowledgeUnitRepository,
     UnitPermissionRepository,
 )
+from app.services.knowledge_index_service import (
+    KnowledgeIndexService,
+    build_knowledge_index_service,
+)
 
 if TYPE_CHECKING:
     from app.domain.user import CurrentUser
@@ -136,10 +140,15 @@ async def _resolve_target_labels(
 
 
 class KnowledgeUnitService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        index_service: KnowledgeIndexService | None = None,
+    ) -> None:
         self._session = session
         self._unit_repo = KnowledgeUnitRepository(session)
         self._perm_repo = UnitPermissionRepository(session)
+        self._index_service = index_service or build_knowledge_index_service(session)
 
     async def list(
         self,
@@ -226,6 +235,9 @@ class KnowledgeUnitService:
         self, unit_id: int, data: KnowledgeUnitPatch, user: CurrentUser
     ) -> KnowledgeUnitResponse:
         update_kwargs: dict = {}
+        content_changed = data.content is not None
+        metadata_changed = data.title is not None or data.category is not None
+
         if data.title is not None:
             update_kwargs["title"] = data.title
         if data.content is not None:
@@ -235,14 +247,22 @@ class KnowledgeUnitService:
             update_kwargs["summary"] = data.summary
         if data.category is not None:
             update_kwargs["category"] = data.category
+        if content_changed or metadata_changed:
+            update_kwargs["status"] = "vector_pending"
 
         unit = await self._unit_repo.update(unit_id, **update_kwargs)
         if unit is None:
             raise KnowledgeUnitNotFoundError(f"id={unit_id}")
         await self._session.commit()
 
+        if content_changed:
+            await self._index_service.rebuild_unit(unit_id)
+        elif metadata_changed:
+            await self._index_service.sync_metadata(unit_id)
+
         logger.info("knowledge.unit.patch unit_id={} actor={}", unit_id, user.id)
-        return await self._build_summary(unit_id, unit)
+        refreshed = await self._unit_repo.find_by_id(unit_id)
+        return await self._build_summary(unit_id, refreshed or unit)
 
     async def patch_full(
         self, unit_id: int, data: KnowledgeUnitPatch, user: CurrentUser
@@ -252,6 +272,7 @@ class KnowledgeUnitService:
         return await self.get(unit_id)
 
     async def batch_delete(self, req: BatchDeleteRequest) -> int:
+        await self._index_service.delete_units(req.ids)
         deleted = await self._unit_repo.delete_by_ids(req.ids)
         await self._session.commit()
         logger.warning("knowledge.unit.batch_delete count={}", deleted)
@@ -367,5 +388,8 @@ class KnowledgeUnitService:
         )
 
 
-def build_knowledge_unit_service(session: AsyncSession) -> KnowledgeUnitService:
-    return KnowledgeUnitService(session)
+def build_knowledge_unit_service(
+    session: AsyncSession,
+    index_service: KnowledgeIndexService | None = None,
+) -> KnowledgeUnitService:
+    return KnowledgeUnitService(session, index_service=index_service)
