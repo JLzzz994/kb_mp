@@ -58,6 +58,9 @@ jobs:
       - name: Lint (ruff format check)
         run: uv run ruff format --check .
 
+      - name: Ruff import diagnostic
+        run: uv run ruff check app/infrastructure/parsers/mineru_parser.py --fix --diff || true
+
       - name: Lint (ruff check)
         run: uv run ruff check .
 
