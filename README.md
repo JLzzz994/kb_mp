@@ -109,6 +109,8 @@ seed 数据调整为：
 | SSE 引用返回 | 已有 |
 | Query Rewrite / HyDE / RRF / BGE-Reranker | 已落地：关键词 + rewrite 向量 + HyDE 向量三路召回，RRF 融合，BGE 可配置精排 |
 | MinerU | 已接入 CLI/远程 API 模式，auto 失败时回退 pypdf/python-docx |
+| 固定评测 / bad case / RAGAS | 已落地固定 ERP/WMS 评测集、Hit@K/Recall@K/MRR、bad-case 分类与可选 RAGAS runner |
+| 知识更新 / 索引一致性 | 已落地 unit 级增量重建、旧向量清理、index-status、批量 audit/repair |
 | Vue 3 | 当前代码为 React，需继续迁移 |
 
 ## 本地开发
@@ -166,6 +168,60 @@ PDF / DOCX / MD / TXT
 
 MinerU 采用外部 CLI/服务方式接入，不强塞进默认 `uv sync --all-extras`，避免 CI 和普通开发环境被大型模型依赖拖慢。安装 MinerU 后，`DOCUMENT_PARSER_BACKEND=auto` 会对 PDF/DOCX 优先尝试 MinerU；也可以配置 `MINERU_API_URL` 连接独立解析服务。
 
+## 知识更新与索引一致性
+
+新导入源文件会从临时 UUID 文件归档成 `storage/uploads/{unit_code}.{ext}`，因此后续能够重新定位原 PDF/DOCX。
+
+更新策略：
+
+```text
+PATCH summary
+  -> 只改 MySQL，不动向量
+
+PATCH title/category
+  -> status=vector_pending
+  -> 保留 embedding/page/section
+  -> 仅更新 Milvus chunk 元数据
+  -> status=active
+
+PATCH content
+  -> status=vector_pending
+  -> 从 DB 新正文重新结构化切片
+  -> 先完成 Embedding
+  -> 删除该 unit 旧 chunks
+  -> 写入新 generation chunks
+  -> status=active
+
+POST /api/v1/knowledge-units/{id}/reindex
+  -> 如果归档源文件存在且重新解析文本 hash == DB content_hash
+       优先按原文件重建，保留页码/章节
+     否则
+       从 DB 正文重建，避免旧源文件覆盖人工编辑
+```
+
+RAG 鉴权前还会查询 MySQL，只允许 `status=active` 的知识单元进入 Prompt。
+因此 `vector_pending` 的旧向量、已删除 unit 的 orphan vector 都不会作为有效证据返回。
+
+删除顺序是：**Milvus chunks -> MySQL unit -> 本地归档源文件**。如果向量清理失败，删除操作返回索引同步错误，不先删数据库记录。
+
+当前是 **unit 级增量重建**：只重建发生变化的知识单元，不全量刷新 collection；并未把它描述成 chunk-diff 级增量更新。
+
+运维接口和命令：
+
+```bash
+# 单个知识单元查看一致性
+GET /api/v1/knowledge-units/{id}/index-status
+
+# 单个知识单元人工重建
+POST /api/v1/knowledge-units/{id}/reindex
+
+# 批量 MySQL / Milvus 一致性巡检
+uv run python scripts/check_index_consistency.py
+
+# 显式修复不一致 unit
+uv run python scripts/check_index_consistency.py --repair
+```
+
 ## 当前混合检索链路
 
 ```text
@@ -182,10 +238,25 @@ MinerU 采用外部 CLI/服务方式接入，不强塞进默认 `uv sync --all-e
 
 RRF 只使用各通道排名，不直接比较 MySQL 关键词分数与 Milvus cosine score；BGE-Reranker 开启后使用交叉编码器分数重新排序。模型不可用时自动退回 RRF 排名，不阻断主链路。
 
+## RAG 评测闭环
+
+固定评测集位于 `evals/datasets/erp_wms_fixed.jsonl`，覆盖订单履约、库存/WMS、售后以及跨域问题。
+
+```bash
+# 确定性检索评测：Hit@K / Recall@K / MRR + bad case
+uv run python scripts/evaluate_retrieval.py
+
+# 可选 RAGAS：需要真实回答 trace + evaluator LLM
+uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
+  --input evals/results/rag_traces.jsonl
+```
+
+普通 CI 不调用 RAGAS 评审模型，避免每次提交消耗外部模型 token；RAGAS runner 当前评估 Context Precision、Context Recall、Faithfulness、Factual Correctness。
+
 ## 后续建议
 
 为了让仓库与最新版简历进一步一致，下一阶段建议：
 
-1. 增加 RAGAS/固定评测集与 bad case 回流，量化 Recall@K、MRR、Faithfulness 和答案采纳率。
-2. 增加文档版本更新后的 chunk 增量重建、旧向量清理和索引一致性校验。
-3. 把当前 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
+1. 把当前 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
+2. 多实例部署时把本地源文件归档替换为 MinIO/object storage，并增加对象版本号。
+3. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
