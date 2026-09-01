@@ -88,12 +88,16 @@ seed 数据调整为：
 - SSE 流式问答
 - RBAC + 知识单元级权限过滤
 
-### 前端现状
+### 前端
 
-当前仓库实际前端是 **React + Vite + TypeScript/TSX**。
-原 `master` README 中“Vue 3”与真实代码不一致，本分支先修正业务与 RAG 主链路，不继续把 React 代码描述成 Vue 3。
+当前分支已从原 React/TSX 实现真实迁移为 **Vue 3 + Vite + TypeScript + Pinia + Vue Router**。
 
-如果要与简历中的 Vue 3 技术栈完全一致，下一步应单独迁移前端，而不是只改 README。
+- 登录、权限菜单、路由守卫已迁移为 Vue/Pinia。
+- 产品文档导入、知识资产、ERP/WMS 智能问答已迁移为 Vue SFC。
+- 知识资产页可直接查看 index-status，并由有权限用户触发单 unit reindex。
+- SSE 问答继续保留 citation / unauthorized / interrupt / final 事件处理。
+- 知识运营看板已从 Recharts 改为 **ECharts**，展示 Token 与响应时间趋势。
+- 原 React、React Router、Radix/shadcn TSX 源码与依赖已从该分支移除。
 
 ## 与简历项目口径的对应关系
 
@@ -111,7 +115,7 @@ seed 数据调整为：
 | MinerU | 已接入 CLI/远程 API 模式，auto 失败时回退 pypdf/python-docx |
 | 固定评测 / bad case / RAGAS | 已落地固定 ERP/WMS 评测集、Hit@K/Recall@K/MRR、bad-case 分类与可选 RAGAS runner |
 | 知识更新 / 索引一致性 | 已落地 unit 级增量重建、旧向量清理、index-status、批量 audit/repair |
-| Vue 3 | 当前代码为 React，需继续迁移 |
+| Vue 3 / Pinia / ECharts | 已完成前端真实迁移，React/TSX 残留扫描为 0 |
 
 ## 本地开发
 
@@ -255,8 +259,8 @@ uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
 
 ## 后续建议
 
-为了让仓库与最新版简历进一步一致，下一阶段建议：
+下一阶段建议：
 
-1. 把当前 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
-2. 多实例部署时把本地源文件归档替换为 MinIO/object storage，并增加对象版本号。
-3. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
+1. 多实例部署时把本地源文件归档替换为 MinIO/object storage，并增加对象版本号。
+2. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
+3. 将当前仍为占位交互的用户、角色、部门、FAQ 与知识缺口页继续产品化，但不影响核心 RAG 主链路。
