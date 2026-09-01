@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from app.config.settings import settings
+from app.domain.document import DocumentBlock, ParsedDocument
 from app.infrastructure.database import KnowledgeUnitRecord
+from app.infrastructure.file_storage import persist_unit_source
 from app.infrastructure.structured_splitter import StructuredSplitter
 from app.services.knowledge_index_service import KnowledgeIndexService
 from app.services.knowledge_unit_service import _compute_content_hash, _gen_unit_code
@@ -55,13 +58,20 @@ class FakeMilvus:
         return self.count
 
 
-async def _create_unit(db_session, seeded_admin, *, content: str) -> KnowledgeUnitRecord:
+async def _create_unit(
+    db_session,
+    seeded_admin,
+    *,
+    content: str,
+    file_type: str | None = None,
+) -> KnowledgeUnitRecord:
     unit = KnowledgeUnitRecord(
         unit_code=_gen_unit_code(),
         title="WMS 库存手册",
         content=content,
         category="wms",
         source_file_name="wms.pdf",
+        file_type=file_type,
         content_hash=_compute_content_hash(content),
         status="active",
         creator_id=seeded_admin["user_id"],
@@ -147,3 +157,60 @@ async def test_index_status_detects_missing_chunks(db_session, seeded_admin) -> 
     assert status.chunk_count == 0
     assert status.consistent is False
     assert status.detail == "index requires rebuild"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_prefers_matching_archived_source_structure(
+    db_session,
+    seeded_admin,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    content = "库存管理\n\n可用库存说明。"
+    unit = await _create_unit(
+        db_session,
+        seeded_admin,
+        content=content,
+        file_type="pdf",
+    )
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path))
+    temp_source = tmp_path / "upload.pdf"
+    temp_source.write_bytes(b"demo-pdf")
+    persist_unit_source(temp_source, unit.unit_code)
+
+    class FakeParserFactory:
+        def parse_document(self, _path):
+            return ParsedDocument(
+                text=content,
+                parser_name="fake_source",
+                blocks=[
+                    DocumentBlock(
+                        text="库存管理",
+                        page_no=3,
+                        block_type="text",
+                        heading_level=1,
+                    ),
+                    DocumentBlock(
+                        text="可用库存说明。",
+                        page_no=3,
+                        block_type="text",
+                    ),
+                ],
+            )
+
+    milvus = FakeMilvus()
+    service = KnowledgeIndexService(
+        db_session,
+        embedding=FakeEmbedding(),
+        milvus=milvus,
+        parser_factory=FakeParserFactory(),
+        splitter=StructuredSplitter(chunk_size=100, overlap=0),
+    )
+
+    result = await service.rebuild_unit(unit.id)
+
+    assert result.consistent is True
+    assert len(milvus.rows) == 1
+    assert milvus.rows[0]["page_start"] == 3
+    assert milvus.rows[0]["page_end"] == 3
+    assert milvus.rows[0]["section_path"] == "库存管理"
