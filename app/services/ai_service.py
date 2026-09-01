@@ -149,8 +149,14 @@ class AIService:
                 "citation",
                 {
                     "unit_id": int(c["unit_id"]),
+                    "chunk_id": str(c.get("chunk_id", "")),
+                    "chunk_index": int(c.get("chunk_index", 0)),
                     "title": str(c.get("title", "")),
                     "score": float(c.get("score", 0.0)),
+                    "page_start": c.get("page_start"),
+                    "page_end": c.get("page_end"),
+                    "section_path": str(c.get("section_path", "")),
+                    "source_file_name": str(c.get("source_file_name", "")),
                 },
             )
 
