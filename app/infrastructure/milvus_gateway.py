@@ -184,6 +184,72 @@ class MilvusGateway:
             return
         coll = self._ensure_collection()
         coll.delete(f"unit_id in {unit_ids}")
+        coll.flush()
+
+    async def count_by_unit_id(self, unit_id: int) -> int:
+        """Count indexed chunks for consistency checks."""
+        coll = self._ensure_collection()
+        rows = coll.query(
+            expr=f"unit_id == {int(unit_id)}",
+            output_fields=["chunk_id"],
+            limit=16384,
+        )
+        return len(rows)
+
+    async def update_unit_metadata(
+        self,
+        unit_id: int,
+        *,
+        title: str,
+        category: str | None,
+        source_file_name: str | None,
+    ) -> int:
+        """Update non-vector metadata while preserving chunk/page/section information."""
+        coll = self._ensure_collection()
+        rows = coll.query(
+            expr=f"unit_id == {int(unit_id)}",
+            output_fields=[
+                "chunk_id",
+                "unit_id",
+                "chunk_index",
+                "page_start",
+                "page_end",
+                "embedding",
+                "title",
+                "content",
+                "category",
+                "source_file_name",
+                "section_path",
+                "block_types",
+            ],
+            limit=16384,
+        )
+        if not rows:
+            return 0
+
+        normalized: list[dict] = []
+        for row in rows:
+            section_path = str(row.get("section_path") or "")
+            section_title = f"{title} / {section_path}" if section_path else title
+            normalized.append(
+                {
+                    "chunk_id": str(row["chunk_id"]),
+                    "unit_id": int(row["unit_id"]),
+                    "chunk_index": int(row.get("chunk_index") or 0),
+                    "page_start": int(row.get("page_start") or 0),
+                    "page_end": int(row.get("page_end") or 0),
+                    "embedding": row["embedding"],
+                    "title": section_title,
+                    "content": str(row.get("content") or ""),
+                    "category": category or "",
+                    "source_file_name": source_file_name or "",
+                    "section_path": section_path,
+                    "block_types": str(row.get("block_types") or ""),
+                }
+            )
+        coll.upsert(normalized)
+        coll.flush()
+        return len(normalized)
 
 
 __all__ = ["MilvusGateway"]
