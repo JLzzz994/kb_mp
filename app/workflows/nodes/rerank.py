@@ -1,14 +1,41 @@
-"""rerank 节点：动态断崖截断（score[i+1]/score[i] < 0.75 停止）。
-
-> 演示期：直接返回所有 citations（不截断）；生产环境按 score 序列找断崖。
-"""
+"""rerank 节点：BGE-Reranker 精排 + 动态断崖截断。"""
 
 from __future__ import annotations
 
+import logging
+
+from app.config.settings import settings
 from app.workflows.context import GraphContext
 from app.workflows.state import ChatState
 
-_RERANK_THRESHOLD = 0.75
+logger = logging.getLogger(__name__)
+
+
+def _dynamic_truncate(citations: list[dict]) -> list[dict]:
+    if not citations:
+        return []
+
+    ordered = sorted(citations, key=lambda item: item["score"], reverse=True)
+    kept: list[dict] = []
+    min_keep = max(1, settings.rerank_min_keep)
+
+    for index, citation in enumerate(ordered):
+        score = float(citation["score"])
+        if index >= settings.rerank_top_k:
+            break
+
+        if len(kept) < min_keep:
+            kept.append(citation)
+            continue
+
+        prev_score = float(kept[-1]["score"])
+        if score < settings.rerank_min_score:
+            break
+        if prev_score > 0 and (score / prev_score) < settings.rerank_cliff_ratio:
+            break
+        kept.append(citation)
+
+    return kept
 
 
 async def rerank_node(state: ChatState, ctx: GraphContext) -> ChatState:
@@ -17,19 +44,29 @@ async def rerank_node(state: ChatState, ctx: GraphContext) -> ChatState:
         state["reranked_citations"] = []
         return state
 
-    # 按 score DESC 排序
-    sorted_citations = sorted(citations, key=lambda c: c["score"], reverse=True)
+    reranked: list[dict]
+    if ctx.rerank is not None:
+        documents = [f"{item['title']}\n{item['content']}" for item in citations]
+        try:
+            ranked = await ctx.rerank.rerank(
+                state["question"],
+                documents,
+                top_k=min(settings.rerank_top_k, len(documents)),
+            )
+            reranked = []
+            for original_index, score in ranked:
+                if original_index < 0 or original_index >= len(citations):
+                    continue
+                item = dict(citations[original_index])
+                item["score"] = float(score)
+                reranked.append(item)
+        except Exception as exc:
+            logger.warning("rerank.model.failed error=%s; fallback to RRF score", exc)
+            reranked = [dict(item) for item in citations]
+    else:
+        reranked = [dict(item) for item in citations]
 
-    # 动态断崖：找到第一个 score[i+1] / score[i] < 0.75 的位置
-    kept: list = [sorted_citations[0]]
-    for i in range(1, len(sorted_citations)):
-        prev = sorted_citations[i - 1]["score"]
-        curr = sorted_citations[i]["score"]
-        if prev == 0 or (curr / prev) < _RERANK_THRESHOLD:
-            break
-        kept.append(sorted_citations[i])
-
-    state["reranked_citations"] = kept
+    state["reranked_citations"] = _dynamic_truncate(reranked)
     return state
 
 
