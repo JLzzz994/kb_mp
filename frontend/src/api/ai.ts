@@ -68,8 +68,14 @@ export async function deleteSession(id: string): Promise<void> {
 
 export interface CitationEventData {
   unit_id: number;
+  chunk_id?: string;
+  chunk_index?: number;
   title: string;
   score: number;
+  page_start?: number | null;
+  page_end?: number | null;
+  section_path?: string;
+  source_file_name?: string;
 }
 
 export interface UnauthorizedUnit {
