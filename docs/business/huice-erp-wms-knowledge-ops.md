@@ -66,10 +66,20 @@
 - BGE-Reranker 可配置精排与动态断崖截断；
 - reranker 不可用时自动回退 RRF 排名。
 
+结构化入库也已补齐：
+
+- PDF/DOCX 在 auto/mineru 模式下调用 MinerU；
+- 读取 *_content_list.json，保留 page_idx、标题层级、block type；
+- StructuredSplitter 生成 section_path、page_start/page_end；
+- BGE-M3 对 chunk 批量 embedding；
+- Milvus 改为 chunk_id 主键，同一个知识单元可保存多个 chunk；
+- 引用通过 SSE 返回页码、章节和来源文件；
+- MinerU 不可用时 auto 模式回退原生 parser。
+
 当前仍未完整做实：
 
-- MinerU 真实解析链路；
 - RAGAS/固定评测集与 bad case 回流；
+- 文档更新后的 chunk 增量重建与旧向量清理；
 - Vue 3 前端迁移。
 
 面试时不要把“规划中的增强项”说成这个分支已经存在的代码。
