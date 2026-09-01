@@ -188,6 +188,7 @@ class KnowledgeImportService:
                     archived_path,
                 )
             except Exception as exc:
+                remove_file(saved_path)
                 logger.warning(
                     "knowledge.import.source_archive.failed unit_id={} error={}",
                     record.id,
