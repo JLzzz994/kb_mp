@@ -30,6 +30,10 @@ class ChatState(TypedDict, total=False):
     # faq_cache_lookup
     faq_hit: dict | None  # {"answer": str, "related_unit_id": int, "unit_updated_at": str}
     # retrieve
+    rewritten_query: str
+    hyde_document: str
+    retrieval_terms: list[str]
+    retrieval_channel_counts: dict[str, int]
     retrieved_citations: list[Citation]
     # rerank
     reranked_citations: list[Citation]
