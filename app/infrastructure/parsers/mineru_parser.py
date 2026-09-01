@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
+import pathlib
 
 from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument
@@ -156,12 +156,12 @@ class MinerUParser:
     def available(self) -> bool:
         return shutil.which(self._executable) is not None
 
-    def parse_document(self, path: Path) -> ParsedDocument:
+    def parse_document(self, path: pathlib.Path) -> ParsedDocument:
         if not self.available():
             raise ParseError(f"MinerU executable not found: {self._executable}", path)
 
         with tempfile.TemporaryDirectory(prefix="kb-mineru-") as temp_dir:
-            output_dir = Path(temp_dir)
+            output_dir = pathlib.Path(temp_dir)
             command = [self._executable, "-p", str(path), "-o", str(output_dir)]
             if self._api_url:
                 command.extend(["--api-url", self._api_url])
