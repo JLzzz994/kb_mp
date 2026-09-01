@@ -24,6 +24,31 @@ def save_upload(filename: str, content: bytes) -> Path:
     return target
 
 
+def persist_unit_source(path: Path | str, unit_code: str) -> Path:
+    """把临时上传文件归档为可通过 unit_code 重定位的源文件。"""
+    src = Path(path)
+    target = get_storage_dir() / f"{unit_code}{src.suffix.lower()}"
+    if src.resolve() == target.resolve():
+        return target
+    target.unlink(missing_ok=True)
+    shutil.move(str(src), str(target))
+    return target
+
+
+def find_unit_source(unit_code: str, file_type: str | None) -> Path | None:
+    """根据 unit_code + file_type 找到原始上传文件。"""
+    if not file_type:
+        return None
+    path = get_storage_dir() / f"{unit_code}.{file_type.lower().lstrip('.')}"
+    return path if path.exists() else None
+
+
+def remove_unit_source(unit_code: str, file_type: str | None) -> None:
+    path = find_unit_source(unit_code, file_type)
+    if path is not None:
+        remove_file(path)
+
+
 def remove_file(path: Path | str) -> None:
     """删除落盘文件（不存在不报错）。"""
     try:
@@ -42,4 +67,12 @@ def move_to(src: Path | str, dst_dir: Path | str) -> Path:
     return target
 
 
-__all__ = ["get_storage_dir", "save_upload", "remove_file", "move_to"]
+__all__ = [
+    "get_storage_dir",
+    "save_upload",
+    "persist_unit_source",
+    "find_unit_source",
+    "remove_unit_source",
+    "remove_file",
+    "move_to",
+]
