@@ -58,13 +58,13 @@ class ParserFactory:
         text = handler.parse(path)
         return ParsedDocument(
             text=text,
-            blocks=_native_blocks(text),
+            blocks=native_blocks(text),
             parser_name=f"native_{ext}",
         )
 
 
-def _native_blocks(text: str) -> list[DocumentBlock]:
-    """原生解析也尽量识别 Markdown 风格标题，统一进入结构化 chunker。"""
+def native_blocks(text: str) -> list[DocumentBlock]:
+    """从纯文本识别 Markdown 风格标题，供手工编辑后的重新切片复用。"""
     blocks: list[DocumentBlock] = []
     for raw in re.split(r"\n\s*\n", text):
         value = raw.strip()
@@ -84,6 +84,16 @@ def _native_blocks(text: str) -> list[DocumentBlock]:
     return blocks
 
 
+def parsed_document_from_text(text: str, parser_name: str = "manual_text") -> ParsedDocument:
+    """把数据库中的纯文本重新包装为结构化文档。"""
+    value = text.strip()
+    return ParsedDocument(
+        text=value,
+        blocks=native_blocks(value),
+        parser_name=parser_name,
+    )
+
+
 _parser_factory = ParserFactory()
 
 
@@ -92,4 +102,10 @@ def get_parser_factory() -> ParserFactory:
     return _parser_factory
 
 
-__all__ = ["ParserFactory", "get_parser_factory", "UnsupportedFormatError"]
+__all__ = [
+    "ParserFactory",
+    "get_parser_factory",
+    "native_blocks",
+    "parsed_document_from_text",
+    "UnsupportedFormatError",
+]
