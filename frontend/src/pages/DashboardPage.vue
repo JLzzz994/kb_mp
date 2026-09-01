@@ -93,7 +93,7 @@ function renderCharts() {
   if (responseEl.value) {
     responseChart ??= echarts.init(responseEl.value);
     responseChart.setOption({
-      tooltip: { trigger: "axis", valueFormatter: (value) => formatMs(Number(value)) },
+      tooltip: { trigger: "axis", valueFormatter: (value: unknown) => formatMs(Number(value)) },
       legend: { data: ["均值", "P95"], right: 8 },
       grid: { left: 52, right: 18, top: 42, bottom: 34 },
       xAxis: {
