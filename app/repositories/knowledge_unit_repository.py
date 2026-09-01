@@ -174,6 +174,7 @@ class KnowledgeUnitRepository:
         summary: str | None = None,
         category: str | None = None,
         content_hash: str | None = None,
+        status: str | None = None,
     ) -> KnowledgeUnitRecord | None:
         record = await self.find_by_id(unit_id)
         if record is None:
@@ -188,6 +189,8 @@ class KnowledgeUnitRepository:
             record.category = category
         if content_hash is not None:
             record.content_hash = content_hash
+        if status is not None:
+            record.status = status
         await self._session.flush()
         return record
 
