@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 
 class Citation(TypedDict):
@@ -12,6 +12,13 @@ class Citation(TypedDict):
     title: str
     score: float
     content: str
+    chunk_id: NotRequired[str]
+    chunk_index: NotRequired[int]
+    page_start: NotRequired[int | None]
+    page_end: NotRequired[int | None]
+    section_path: NotRequired[str]
+    source_file_name: NotRequired[str]
+    block_types: NotRequired[str]
 
 
 class ChatState(TypedDict, total=False):
