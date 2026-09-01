@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.common.errors import KnowledgeIndexSyncError
 from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument
 from app.infrastructure.database import KnowledgeUnitRecord
@@ -214,3 +215,18 @@ async def test_rebuild_prefers_matching_archived_source_structure(
     assert milvus.rows[0]["page_start"] == 3
     assert milvus.rows[0]["page_end"] == 3
     assert milvus.rows[0]["section_path"] == "库存管理"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_keeps_pending_when_embedding_backend_is_missing(
+    db_session,
+    seeded_admin,
+) -> None:
+    unit = await _create_unit(db_session, seeded_admin, content="库存同步规则")
+    service = KnowledgeIndexService(db_session, embedding=None, milvus=FakeMilvus())
+
+    with pytest.raises(KnowledgeIndexSyncError):
+        await service.rebuild_unit(unit.id)
+
+    await db_session.refresh(unit)
+    assert unit.status == "vector_pending"
