@@ -15,6 +15,7 @@ from app.api.schemas.knowledge_schema import (
     CheckPermissionsResponse,
     ConfigurePermissionsRequest,
     KnowledgeUnitDetailResponse,
+    KnowledgeIndexStatusResponse,
     KnowledgeUnitListResponse,
     KnowledgeUnitPatch,
     KnowledgeUnitResponse,
@@ -24,6 +25,10 @@ from app.infrastructure.redis_client import RedisClient
 from app.services.knowledge_import_service import (
     KnowledgeImportService,
     build_knowledge_import_service,
+)
+from app.services.knowledge_index_service import (
+    KnowledgeIndexService,
+    build_knowledge_index_service,
 )
 from app.services.knowledge_permission_service import (
     KnowledgePermissionService,
@@ -65,6 +70,15 @@ def get_knowledge_import_service(
 
 
 KnowledgeImportServiceDep = Annotated[KnowledgeImportService, Depends(get_knowledge_import_service)]
+
+
+def get_knowledge_index_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> KnowledgeIndexService:
+    return build_knowledge_index_service(session)
+
+
+KnowledgeIndexServiceDep = Annotated[KnowledgeIndexService, Depends(get_knowledge_index_service)]
 
 
 # ── 导入（multipart） ─────────────────────────────
@@ -162,6 +176,46 @@ async def batch_delete_knowledge_units(
     from fastapi import Response
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/api/v1/knowledge-units/{unit_id}/index-status",
+    response_model=KnowledgeIndexStatusResponse,
+    dependencies=[Depends(require_permission("knowledge:read"))],
+)
+async def get_knowledge_index_status(
+    unit_id: int,
+    service: KnowledgeIndexServiceDep,
+) -> KnowledgeIndexStatusResponse:
+    result = await service.get_status(unit_id)
+    return KnowledgeIndexStatusResponse(
+        unit_id=result.unit_id,
+        configured=result.configured,
+        db_status=result.db_status,
+        chunk_count=result.chunk_count,
+        consistent=result.consistent,
+        detail=result.detail,
+    )
+
+
+@router.post(
+    "/api/v1/knowledge-units/{unit_id}/reindex",
+    response_model=KnowledgeIndexStatusResponse,
+    dependencies=[Depends(require_permission("knowledge:write"))],
+)
+async def reindex_knowledge_unit(
+    unit_id: int,
+    service: KnowledgeIndexServiceDep,
+) -> KnowledgeIndexStatusResponse:
+    result = await service.rebuild_unit(unit_id)
+    return KnowledgeIndexStatusResponse(
+        unit_id=result.unit_id,
+        configured=result.configured,
+        db_status=result.db_status,
+        chunk_count=result.chunk_count,
+        consistent=result.consistent,
+        detail=result.detail,
+    )
 
 
 # ── 权限配置 ─────────────────────────────
