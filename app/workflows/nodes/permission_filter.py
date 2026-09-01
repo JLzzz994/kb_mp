@@ -37,7 +37,7 @@ async def permission_filter_node(state: ChatState, ctx: GraphContext) -> ChatSta
         authorized_ids = compute_user_permission_bitmap_sync(current_user, all_perms)
 
     authorized = [c for c in citations if c["unit_id"] in authorized_ids]
-    unauthorized = [c["unit_id"] for c in citations if c["unit_id"] not in authorized_ids]
+    unauthorized = sorted({c["unit_id"] for c in citations if c["unit_id"] not in authorized_ids})
 
     state["authorized_citations"] = authorized
     state["unauthorized_unit_ids"] = unauthorized
