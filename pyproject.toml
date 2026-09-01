@@ -14,6 +14,7 @@ dependencies = [
     "loguru==0.7.3",
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
+    "python-multipart>=0.0.20",       # FastAPI multipart file upload
     # 新增（Phase 2A 风险报告 H14 修复）
     "bcrypt>=4.2.0",               # M1+M2 密码哈希
     "PyJWT>=2.9.0",                # M1 JWT
