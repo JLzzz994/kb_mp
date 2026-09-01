@@ -76,10 +76,25 @@
 - 引用通过 SSE 返回页码、章节和来源文件；
 - MinerU 不可用时 auto 模式回退原生 parser。
 
+评测与知识维护闭环也已补齐：
+
+- 固定 ERP/WMS 评测集；
+- Hit@K / Recall@K / MRR；
+- no_recall / source_miss / low_rank / low_confidence bad-case 分类；
+- 可选 RAGAS runner：Context Precision / Recall、Faithfulness、Factual Correctness；
+- unit 级增量重建，不全量刷新 Milvus collection；
+- PATCH content 触发重新切片 + Embedding + 旧 chunk 清理；
+- PATCH title/category 仅同步 Milvus 元数据，不重复 Embedding；
+- vector_pending / 已删除 unit 在权限过滤前被剔除；
+- index-status、单 unit reindex、批量 consistency audit/repair；
+- 新导入源文件按 unit_code 归档，hash 一致时可用原文件重建页码/章节。
+
+这里的“增量重建”明确是 **知识单元级增量**，不是 chunk-diff 算法，不在面试中扩大描述。
+
 当前仍未完整做实：
 
-- RAGAS/固定评测集与 bad case 回流；
-- 文档更新后的 chunk 增量重建与旧向量清理；
-- Vue 3 前端迁移。
+- Vue 3 前端迁移；
+- 多实例部署下的 MinIO/object storage 源文件版本管理；
+- 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）。
 
 面试时不要把“规划中的增强项”说成这个分支已经存在的代码。
