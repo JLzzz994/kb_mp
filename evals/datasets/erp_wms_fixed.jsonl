@@ -1,0 +1,10 @@
+{"case_id":"order-review-001","question":"旺店通订单为什么没有进入待审核，应该先检查哪些条件？","expected_sources":["05-旺店通订单履约FAQ-演示.md"],"reference":"先确认订单是否成功下载到 ERP、当前状态是否满足审核条件，并排查缺货、地址异常、风险拦截、人工锁定及自动审单规则。","tags":["订单履约","审单"]}
+{"case_id":"order-rule-002","question":"自动审单规则没有命中时怎么排查？","expected_sources":["05-旺店通订单履约FAQ-演示.md"],"reference":"应检查订单状态、异常拦截条件、自动审单规则配置和规则优先级，并补充平台和订单类型。","tags":["订单履约","自动审单"]}
+{"case_id":"order-platform-003","question":"平台特殊类型订单审核异常需要补充什么信息？","expected_sources":["05-旺店通订单履约FAQ-演示.md"],"reference":"需要补充平台渠道和订单类型，并结合订单状态和审核前置条件排查。","tags":["订单履约","平台订单"]}
+{"case_id":"inventory-sync-001","question":"WMS 库存同步异常排查前需要收集哪些信息？","expected_sources":["06-WMS库存异常排查-演示.md"],"reference":"应收集商家、店铺、仓库、SKU、异常时间、ERP/WMS/平台库存观测值、近期库存动作、单据号及日志时间点。","tags":["库存","WMS"]}
+{"case_id":"inventory-value-002","question":"ERP 库存、WMS 库存和平台库存不一致时怎么定位？","expected_sources":["06-WMS库存异常排查-演示.md"],"reference":"先比对三方库存观测值，再检查近期入出库、调拨、盘点、售后、占用锁定和同步任务状态。","tags":["库存","同步"]}
+{"case_id":"inventory-log-003","question":"库存同步失败排查为什么要拿业务单据号和错误日志时间点？","expected_sources":["06-WMS库存异常排查-演示.md"],"reference":"业务单据号和错误日志时间点用于关联具体库存动作与同步任务，缩小异常定位范围。","tags":["库存","日志"]}
+{"case_id":"aftersales-refund-001","question":"仅退款后 WMS 一定会生成逆向入库吗？","expected_sources":["07-售后逆向流程-演示.md"],"reference":"需要先区分仅退款、退货退款等售后类型，再判断是否需要 WMS 逆向入库；知识助手不能直接执行退款或库存动作。","tags":["售后","仅退款"]}
+{"case_id":"aftersales-return-002","question":"退货退款后库存什么时候回补，应该看哪些状态？","expected_sources":["07-售后逆向流程-演示.md"],"reference":"需要结合售后类型、ERP 与平台售后单关联、WMS 逆向任务及人工复核状态判断库存回补时点。","tags":["售后","库存"]}
+{"case_id":"aftersales-exchange-003","question":"换货和补发场景 ERP 与 WMS 应该怎么衔接？","expected_sources":["07-售后逆向流程-演示.md"],"reference":"应区分换货、补发场景，核对 ERP 售后单与 WMS 重新出库或逆向任务的衔接关系。","tags":["售后","换货","补发"]}
+{"case_id":"cross-refund-stock-001","question":"退款以后库存一直没有回补，应该从售后和库存两个方向查什么？","expected_sources":["07-售后逆向流程-演示.md","06-WMS库存异常排查-演示.md"],"reference":"先确认售后类型和逆向任务，再核对近期库存动作、占用锁定、库存观测值及同步任务，必要时由有权限人员人工复核。","tags":["售后","库存","跨域"]}
