@@ -1,19 +1,8 @@
-"""KnowledgeImportService：multipart 上传 → 解析 → 切片 → 入库。
-
-> 流程：
-> 1. 校验单文件 ≤ max_upload_size_mb，总 ≤ max_total_upload_size_mb
-> 2. 落盘 storage/uploads/{uuid}.{ext}
-> 3. 对每个文件：
->    a. SHA-256 → 查重（已存在 → rejected: duplicate_content）
->    b. parser_factory.parse(path) → 失败 → rejected: parse_error
->    c. splitter.split(text) → list[Chunk]
->    d. 创建 KnowledgeUnitRecord（每文件一行，status='active'）
->    e. BackgroundTasks.add_task(milvus_upsert, ...)  ← M4 接入，演示期 noop
-> 4. 返回 accepted + rejected
-"""
+"""Knowledge import: upload -> structured parse -> chunks -> DB -> Milvus."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from datetime import datetime
@@ -21,15 +10,10 @@ from datetime import datetime
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.knowledge_import_schema import (
-    ImportRejectedItem,
-    ImportTaskResponse,
-)
-from app.common.errors import (
-    FileSizeExceededError,
-)
+from app.api.schemas.knowledge_import_schema import ImportRejectedItem, ImportTaskResponse
+from app.common.errors import FileSizeExceededError
 from app.config.settings import settings
-from app.domain.knowledge_unit import KnowledgeChunk
+from app.domain.document import DocumentBlock, ParsedDocument, StructuredChunk
 from app.infrastructure.file_storage import save_upload
 from app.infrastructure.parser_factory import (
     ParserFactory,
@@ -37,7 +21,7 @@ from app.infrastructure.parser_factory import (
     get_parser_factory,
 )
 from app.infrastructure.parsers.base_parser import ParseError
-from app.infrastructure.splitter import Splitter
+from app.infrastructure.structured_splitter import StructuredSplitter
 from app.repositories.knowledge_unit_repository import KnowledgeUnitRepository
 
 _REJECT_REASONS = {
@@ -65,18 +49,25 @@ def _generate_task_id() -> str:
 
 
 def _safe_filename(filename: str) -> str:
-    """strip 路径成分（防 directory traversal）。"""
     return filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
 
 
 def _extract_title_and_summary(text: str, filename: str) -> tuple[str, str | None]:
-    """首段非空行作 title；首 200 字作 summary。"""
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     title = lines[0] if lines else filename
-    if len(title) > 255:
-        title = title[:255]
+    title = title[:255]
     summary = " ".join(lines[:5])[:200] if len(lines) > 1 else None
     return title, summary
+
+
+def _legacy_parsed_document(raw_text: str) -> ParsedDocument:
+    """Compatibility for injected test parser factories that only expose parse()."""
+    blocks = [
+        DocumentBlock(text=part.strip())
+        for part in raw_text.split("\n\n")
+        if part.strip()
+    ]
+    return ParsedDocument(text=raw_text, blocks=blocks, parser_name="legacy")
 
 
 class KnowledgeImportService:
@@ -84,10 +75,13 @@ class KnowledgeImportService:
         self._session = session
         self._parser_factory = parser_factory or get_parser_factory()
         self._unit_repo = KnowledgeUnitRepository(session)
-        self._splitter = Splitter()
-        # 演示期：每文件首段作为 unit；演示文件较小（< 600 字符）→ 单 chunk
-        # 真实生产：可迭代为 "每 chunk 一行 knowledge_unit"
-        self._one_unit_per_file = True
+        self._splitter = StructuredSplitter()
+
+    def _parse_document(self, saved_path) -> ParsedDocument:
+        parse_document = getattr(self._parser_factory, "parse_document", None)
+        if callable(parse_document):
+            return parse_document(saved_path)
+        return _legacy_parsed_document(self._parser_factory.parse(saved_path))
 
     async def import_files(
         self,
@@ -95,11 +89,9 @@ class KnowledgeImportService:
         files: list[tuple[str, bytes]],
         user_id: int,
     ) -> ImportTaskResponse:
-        """files: list[(filename, content_bytes)] — 来自 multipart 解析。"""
         rejected: list[ImportRejectedItem] = []
         accepted_count = 0
 
-        # 1) 校验总大小 + 单文件大小
         total_bytes = sum(len(content) for _, content in files)
         max_single = settings.max_upload_size_mb * 1024 * 1024
         max_total = settings.max_total_upload_size_mb * 1024 * 1024
@@ -114,7 +106,6 @@ class KnowledgeImportService:
                 )
                 continue
 
-            # 2) 落盘（即使后续失败也保留，便于排查）
             try:
                 saved_path = save_upload(filename, content)
             except Exception as exc:
@@ -122,9 +113,8 @@ class KnowledgeImportService:
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
 
-            # 3) 解析
             try:
-                raw_text = self._parser_factory.parse(saved_path)
+                document = self._parse_document(saved_path)
             except UnsupportedFormatError:
                 rejected.append(
                     ImportRejectedItem(
@@ -142,7 +132,11 @@ class KnowledgeImportService:
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
 
-            # 4) SHA-256 → 查重
+            raw_text = document.text.strip()
+            if not raw_text:
+                rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
+                continue
+
             content_hash = _compute_content_hash(raw_text)
             existing = await self._unit_repo.find_by_content_hash(content_hash)
             if existing is not None:
@@ -154,14 +148,11 @@ class KnowledgeImportService:
                 )
                 continue
 
-            # 5) 切片（演示期 one_unit_per_file）
-            chunks: list[KnowledgeChunk] = self._splitter.split(raw_text)
+            chunks = self._splitter.split(document)
             if not chunks:
-                chunks = [KnowledgeChunk(text=raw_text, index=0)]
-            first_text = chunks[0].text
-            title, summary = _extract_title_and_summary(first_text, filename)
+                chunks = [StructuredChunk(text=raw_text, index=0)]
 
-            # 6) 落库
+            title, summary = _extract_title_and_summary(raw_text, filename)
             try:
                 from app.infrastructure.database import KnowledgeUnitRecord
 
@@ -180,55 +171,72 @@ class KnowledgeImportService:
                     creator_id=user_id,
                 )
                 await self._unit_repo.create(record)
+                await self._session.commit()
             except Exception as exc:
                 logger.error("import.db_insert.failed filename={} error={}", filename, exc)
+                await self._session.rollback()
                 rejected.append(ImportRejectedItem(filename=filename, reason="parse_error"))
                 continue
 
-            await self._session.commit()
             accepted_count += 1
-
-            # 7) 真实接入：触发后台 Milvus upsert（依赖注入到 app.state）
-            # 演示期：app.state.milvus 为 None → 仅记日志
-            try:
-                from app.api.app import get_app_state
-
-                app_state = get_app_state()
-                milvus = getattr(app_state, "milvus", None)
-                embedding = getattr(app_state, "embedding", None)
-                if milvus is not None and embedding is not None:
-                    import asyncio
-
-                    asyncio.create_task(
-                        _vectorize_and_upsert(
-                            milvus=milvus,
-                            embedding=embedding,
-                            session_factory=self._session_factory,
-                            unit_id=record.id,
-                            content=raw_text,
-                            title=title,
-                            category=file_ext,
-                        )
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "import.background_trigger.failed unit_id={} error={}",
-                    record.id,
-                    exc,
-                )
+            self._trigger_vectorization(
+                unit_id=record.id,
+                title=title,
+                category=file_ext,
+                source_file_name=filename,
+                chunks=chunks,
+            )
             logger.info(
-                "knowledge.import unit_id={} filename={} chunks={}",
+                "knowledge.import unit_id={} filename={} parser={} chunks={}",
                 record.id,
                 filename,
+                document.parser_name,
                 len(chunks),
             )
 
-        task_id = _generate_task_id()
         return ImportTaskResponse(
-            task_id=task_id,
+            task_id=_generate_task_id(),
             accepted_count=accepted_count,
             rejected=rejected,
         )
+
+    def _trigger_vectorization(
+        self,
+        *,
+        unit_id: int,
+        title: str,
+        category: str | None,
+        source_file_name: str,
+        chunks: list[StructuredChunk],
+    ) -> None:
+        try:
+            from app.api.app import get_app_state
+            from app.infrastructure.database import get_session_factory
+
+            app_state = get_app_state()
+            milvus = getattr(app_state, "milvus", None)
+            embedding = getattr(app_state, "embedding", None)
+            if milvus is None or embedding is None:
+                return
+
+            asyncio.create_task(
+                _vectorize_and_upsert(
+                    milvus=milvus,
+                    embedding=embedding,
+                    session_factory=get_session_factory(),
+                    unit_id=unit_id,
+                    title=title,
+                    category=category,
+                    source_file_name=source_file_name,
+                    chunks=chunks,
+                )
+            )
+        except Exception as exc:
+            logger.warning(
+                "import.background_trigger.failed unit_id={} error={}",
+                unit_id,
+                exc,
+            )
 
 
 def build_knowledge_import_service(
@@ -238,48 +246,74 @@ def build_knowledge_import_service(
     return KnowledgeImportService(session, parser_factory)
 
 
-# ── 后台异步向量化（真实接入：本地 BGE + 远程 Milvus） ─────────────────────────────
-
-
 async def _vectorize_and_upsert(
     *,
     milvus,
     embedding,
     session_factory,
     unit_id: int,
-    content: str,
     title: str,
     category: str | None,
+    chunks: list[StructuredChunk] | None = None,
+    content: str | None = None,
+    source_file_name: str = "",
 ) -> None:
-    """后台任务：embed content → Milvus upsert；失败时 mark status=vector_pending。
+    """Embed structured chunks in batch and upsert them into chunk-level Milvus.
 
-    依赖通过闭包传入（避免 import cycle + lifespan 解耦）。
-    失败仅记日志，不阻断用户响应。
+    content remains for backward compatibility with older tests/callers.
     """
-    try:
-        # 1. 真实向量化
-        vec = await embedding.embed(content)
+    if chunks is None:
+        if not content:
+            return
+        chunks = [StructuredChunk(text=content, index=0)]
 
-        # 2. 真实 upsert
-        await milvus.upsert(
-            unit_id=unit_id,
-            embedding=vec,
-            title=title,
-            content=content,
-            category=category,
-        )
+    try:
+        texts = [chunk.text for chunk in chunks]
+        if hasattr(embedding, "embed_batch"):
+            vectors = await embedding.embed_batch(texts)
+        else:
+            vectors = [await embedding.embed(text) for text in texts]
+
+        rows: list[dict] = []
+        for chunk, vector in zip(chunks, vectors, strict=True):
+            section_title = f"{title} / {chunk.section_path}" if chunk.section_path else title
+            rows.append(
+                {
+                    "chunk_id": f"{unit_id}:{chunk.index}",
+                    "unit_id": unit_id,
+                    "chunk_index": chunk.index,
+                    "page_start": chunk.page_start,
+                    "page_end": chunk.page_end,
+                    "embedding": vector,
+                    "title": section_title,
+                    "content": chunk.text,
+                    "category": category or "",
+                    "source_file_name": source_file_name,
+                    "section_path": chunk.section_path,
+                    "block_types": ",".join(chunk.block_types),
+                }
+            )
+
+        if hasattr(milvus, "upsert_chunks"):
+            await milvus.upsert_chunks(rows)
+        else:
+            for row in rows:
+                await milvus.upsert(
+                    unit_id=unit_id,
+                    embedding=row["embedding"],
+                    title=row["title"],
+                    content=row["content"],
+                    category=category,
+                )
+
         logger.info(
-            "import.vectorize.upsert.success unit_id={} dim={}",
+            "import.vectorize.upsert.success unit_id={} chunks={} dim={}",
             unit_id,
-            len(vec),
+            len(rows),
+            len(rows[0]["embedding"]) if rows else 0,
         )
     except Exception as exc:
-        # 3. 失败：标记 status=vector_pending
-        logger.error(
-            "import.vectorize.failed unit_id={} error={}",
-            unit_id,
-            exc,
-        )
+        logger.error("import.vectorize.failed unit_id={} error={}", unit_id, exc)
         try:
             from sqlalchemy import update
 
