@@ -307,7 +307,37 @@ async def test_duplicate_content_via_unit_service(db_session, seeded_admin):
         )
 
 
-# ── 11. 切片器保护代码块（不被打散） ─────────────────────────────
+# ── 11. 索引状态 / reindex ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_index_status_and_reindex_when_vector_backend_disabled(
+    async_client: AsyncClient,
+    seeded_admin,
+    admin_token,
+    sample_unit,
+):
+    status_resp = await async_client.get(
+        f"/api/v1/knowledge-units/{sample_unit.id}/index-status",
+        headers=_auth(admin_token),
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    status_body = status_resp.json()
+    assert status_body["configured"] is False
+    assert status_body["db_status"] == "active"
+    assert status_body["consistent"] is True
+
+    reindex_resp = await async_client.post(
+        f"/api/v1/knowledge-units/{sample_unit.id}/reindex",
+        headers=_auth(admin_token),
+    )
+    assert reindex_resp.status_code == 200, reindex_resp.text
+    reindex_body = reindex_resp.json()
+    assert reindex_body["configured"] is False
+    assert reindex_body["db_status"] == "active"
+
+
+# ── 12. 切片器保护代码块（不被打散） ─────────────────────────────
 
 
 @pytest.mark.asyncio
