@@ -121,6 +121,11 @@ uv run uvicorn app.api.app:app --reload --port 8000
 # 初始化 ERP/WMS 业务演示组织
 uv run python scripts/seed.py --reset
 
+# 可选：启用 MinerU
+# 1) 保证 mineru 命令在 PATH 中；或
+# 2) 启动独立 mineru-api，并设置 MINERU_API_URL
+# 默认 auto 模式在 MinerU 不可用时自动回退原生解析器
+
 # 前端
 cd frontend
 npm install
@@ -156,7 +161,7 @@ PDF / DOCX / MD / TXT
   -> Milvus kb_unit_chunks_v2（一个 unit 多个 chunk）
 ```
 
-权限仍然挂在 MySQL 的 `knowledge_unit` 上；Milvus 只负责 chunk 级检索。
+权限仍然挂在 MySQL 的 `knowledge_unit` 上；Milvus 只负责 chunk 级检索。旧 `kb_units` collection 不做原地兼容迁移，本分支默认使用新 collection `kb_unit_chunks_v2`。
 这样可以同时满足“细粒度召回”和“文档级权限治理”。
 
 MinerU 采用外部 CLI/服务方式接入，不强塞进默认 `uv sync --all-extras`，避免 CI 和普通开发环境被大型模型依赖拖慢。安装 MinerU 后，`DOCUMENT_PARSER_BACKEND=auto` 会对 PDF/DOCX 优先尝试 MinerU；也可以配置 `MINERU_API_URL` 连接独立解析服务。
