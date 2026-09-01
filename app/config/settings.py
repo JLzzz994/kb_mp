@@ -54,6 +54,18 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     max_total_upload_size_mb: int = 200
 
+    # ── 文档解析 / MinerU ─────────────────────────────
+    # auto: PDF/DOCX 优先 MinerU，可执行文件不存在或解析失败时回退原生解析器
+    # native: 始终使用 pypdf/python-docx/markdown/txt
+    document_parser_backend: str = "auto"
+    mineru_executable: str = "mineru"
+    mineru_backend: str = ""  # 例如 pipeline；为空时让 MinerU 自动选择
+    mineru_api_url: str = ""  # 可指向独立 mineru-api，避免每次拉起本地服务
+    mineru_model_source: str = ""  # huggingface / modelscope / local
+    mineru_timeout_seconds: int = 600
+    structured_chunk_size: int = 700
+    structured_chunk_overlap: int = 100
+
     # ── Embedding 后端（本地 / 远程） ─────────────────────────────
     # "local_bge"           → 本地 BGE-M3（魔搭下载）
     # "remote_openai"        → 远程 OpenAI 兼容 API（如 DashScope）
