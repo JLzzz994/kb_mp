@@ -101,14 +101,14 @@ seed 数据调整为：
 |---|---|
 | ERP/WMS 产品知识平台 | 已业务化 |
 | 产品/实施/客服/客户成功 | seed + Prompt + UI 已覆盖 |
-| 文档导入/切片/向量入库 | 沿用原知识导入链路 |
+| 文档导入/切片/向量入库 | 已升级为 MinerU 可选结构化解析 + 页码/章节切片 + chunk 级 Milvus |
 | Milvus 检索 | 已有 |
 | 权限过滤后入 Prompt | 已有并强化 |
 | FAQ 审核 | 已有 |
 | 知识缺口 | 已有 |
 | SSE 引用返回 | 已有 |
 | Query Rewrite / HyDE / RRF / BGE-Reranker | 已落地：关键词 + rewrite 向量 + HyDE 向量三路召回，RRF 融合，BGE 可配置精排 |
-| MinerU | 需继续补真实解析接入 |
+| MinerU | 已接入 CLI/远程 API 模式，auto 失败时回退 pypdf/python-docx |
 | Vue 3 | 当前代码为 React，需继续迁移 |
 
 ## 本地开发
@@ -142,6 +142,25 @@ uv run ruff check .
 uv run pytest -v --ignore=tests/test_e2e_t7_real_vectorize.py
 ```
 
+## 当前文档入库链路
+
+```text
+PDF / DOCX / MD / TXT
+  -> ParserFactory
+  -> PDF/DOCX: MinerU(auto/mineru) -> content_list.json
+  -> native fallback: pypdf / python-docx / markdown / txt
+  -> StructuredSplitter
+       保留 section_path / page_start / page_end / block_types
+  -> MySQL: 一文档一个 knowledge_unit（权限对象）
+  -> BGE-M3 embed_batch(chunks)
+  -> Milvus kb_unit_chunks_v2（一个 unit 多个 chunk）
+```
+
+权限仍然挂在 MySQL 的 `knowledge_unit` 上；Milvus 只负责 chunk 级检索。
+这样可以同时满足“细粒度召回”和“文档级权限治理”。
+
+MinerU 采用外部 CLI/服务方式接入，不强塞进默认 `uv sync --all-extras`，避免 CI 和普通开发环境被大型模型依赖拖慢。安装 MinerU 后，`DOCUMENT_PARSER_BACKEND=auto` 会对 PDF/DOCX 优先尝试 MinerU；也可以配置 `MINERU_API_URL` 连接独立解析服务。
+
 ## 当前混合检索链路
 
 ```text
@@ -162,6 +181,6 @@ RRF 只使用各通道排名，不直接比较 MySQL 关键词分数与 Milvus c
 
 为了让仓库与最新版简历进一步一致，下一阶段建议：
 
-1. 接入 MinerU 作为 PDF/复杂文档真实解析链路，并保留页码、标题层级和表格结构元数据。
-2. 增加 RAGAS/固定评测集与 bad case 回流，量化 Recall@K、MRR、Faithfulness 和答案采纳率。
+1. 增加 RAGAS/固定评测集与 bad case 回流，量化 Recall@K、MRR、Faithfulness 和答案采纳率。
+2. 增加文档版本更新后的 chunk 增量重建、旧向量清理和索引一致性校验。
 3. 把当前 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
