@@ -164,7 +164,7 @@ export default function ChatPage() {
                 // 召回为空/无权限：提示并保留输入框，等待用户补充（走 resume）
                 next[next.length - 1] = {
                   role: "assistant",
-                  content: "未找到与您的问题相关的知识。请补充说明（如产品名称、场景），我将重新检索。",
+                  content: "未找到与您的问题相关的产品知识。请补充产品版本、店铺/仓库、订单类型或异常现象，我将重新检索。",
                 };
                 break;
               case "final":
@@ -275,7 +275,7 @@ export default function ChatPage() {
         {/* 中栏：对话主区（AI 工作台用 Deep Navy 主背景） */}
         <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-lg border border-navy/20 bg-navy">
           <header className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
-            <p className="font-display text-sm font-bold text-white">AI 鉴权问答</p>
+            <p className="font-display text-sm font-bold text-white">ERP/WMS 鉴权问答</p>
             <span className="code-text text-xs text-white/45">
               {phase === "streaming" ? "生成中…" : interruptHint ? "等待补充问题" : "就绪"}
             </span>
@@ -287,9 +287,9 @@ export default function ChatPage() {
             <div className="space-y-4">
               {messages.length === 0 && (
                 <div className="py-16 text-center">
-                  <p className="font-display text-lg font-bold text-white/90">基于您有权访问的知识回答</p>
+                  <p className="font-display text-lg font-bold text-white/90">基于您有权访问的 ERP/WMS 产品知识回答</p>
                   <p className="mt-2 text-sm text-white/50">
-                    提问将经过向量召回与四维权限过滤，无权限内容不会出现在回答中。
+                    围绕订单、商品/SKU、库存、仓储、采购和售后检索；无权限内容不会进入回答。
                   </p>
                 </div>
               )}
@@ -344,7 +344,7 @@ export default function ChatPage() {
                 value={input}
                 maxLength={QUESTION_MAX}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={activeId ? "输入问题，如：如何重置密码？" : "请先新建会话"}
+                placeholder={activeId ? "输入问题，如：WMS 库存同步异常怎么排查？" : "请先新建会话"}
                 disabled={!activeId || phase === "streaming"}
                 aria-label="问题输入"
                 className="border-white/15 bg-white/10 text-white placeholder:text-white/35"
@@ -368,7 +368,7 @@ export default function ChatPage() {
         <aside className="space-y-4">
           <div className="rounded-lg border border-boundary bg-card p-4">
             <p className="flex items-center gap-2 font-display text-sm font-bold text-ink">
-              <BookMarked className="h-4 w-4 text-brand" aria-hidden /> 知识引用
+              <BookMarked className="h-4 w-4 text-brand" aria-hidden /> 产品知识引用
             </p>
             <div className="permission-pulse-line mt-3" aria-hidden />
             <ul className="mt-3 space-y-2">
