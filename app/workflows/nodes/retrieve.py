@@ -16,11 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 def _row_to_citation(record, score: float) -> dict:
+    content = str(record.content or "")
     return {
+        "chunk_id": f"sql:{int(record.id)}",
         "unit_id": int(record.id),
         "title": str(record.title or ""),
         "score": float(score),
-        "content": str(record.content or ""),
+        "content": content[:2000],
+        "section_path": "",
+        "source_file_name": str(record.source_file_name or ""),
     }
 
 
@@ -45,10 +49,17 @@ async def _vector_recall(query: str, ctx: GraphContext) -> list[dict]:
         rows = await ctx.milvus.search(query_embedding, top_k=settings.retrieval_vector_top_k)
         return [
             {
+                "chunk_id": str(row.get("chunk_id") or f"vector:{row['unit_id']}"),
                 "unit_id": int(row["unit_id"]),
+                "chunk_index": int(row.get("chunk_index") or 0),
+                "page_start": row.get("page_start"),
+                "page_end": row.get("page_end"),
                 "title": str(row.get("title", "")),
                 "score": float(row.get("score", 0.0)),
                 "content": str(row.get("content", "")),
+                "section_path": str(row.get("section_path", "")),
+                "source_file_name": str(row.get("source_file_name", "")),
+                "block_types": str(row.get("block_types", "")),
             }
             for row in rows
         ]
