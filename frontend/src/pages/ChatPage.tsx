@@ -171,6 +171,8 @@ export default function ChatPage() {
                 next[next.length - 1] = {
                   role: "assistant",
                   content: ev.data.answer,
+                  citations: last?.citations,
+                  unauthorized: last?.unauthorized,
                   usage: {
                     total_tokens: ev.data.usage.total_tokens,
                     response_time_ms: ev.data.usage.response_time_ms,
