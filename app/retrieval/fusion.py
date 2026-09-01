@@ -29,9 +29,7 @@ def reciprocal_rank_fusion(
             if result_key in seen_in_channel:
                 continue
             seen_in_channel.add(result_key)
-            fused_scores[result_key] = (
-                fused_scores.get(result_key, 0.0) + 1.0 / (rrf_k + rank)
-            )
+            fused_scores[result_key] = fused_scores.get(result_key, 0.0) + 1.0 / (rrf_k + rank)
             payloads.setdefault(result_key, dict(item))
 
     if not fused_scores:
