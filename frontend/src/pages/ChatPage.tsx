@@ -380,13 +380,20 @@ export default function ChatPage() {
               {messages
                 .flatMap((m) => m.citations ?? [])
                 .map((c) => (
-                  <li key={c.unit_id} className="rounded-md border border-boundary bg-mist/60 px-3 py-2.5">
+                  <li key={c.chunk_id ?? `${c.unit_id}-${c.chunk_index ?? 0}`} className="rounded-md border border-boundary bg-mist/60 px-3 py-2.5">
                     <p className="truncate text-[13px] font-medium text-ink" title={c.title}>
                       {c.title}
                     </p>
                     <p className="code-text mt-0.5 text-[11px] text-secondarytext">
-                      #{c.unit_id} · 相似度 {(c.score * 100).toFixed(0)}%
+                      #{c.unit_id}
+                      {c.page_start ? ` · P${c.page_start}${c.page_end && c.page_end !== c.page_start ? `-${c.page_end}` : ""}` : ""}
+                      {c.section_path ? ` · ${c.section_path}` : ""}
                     </p>
+                    {c.source_file_name && (
+                      <p className="mt-1 truncate text-[11px] text-secondarytext/80" title={c.source_file_name}>
+                        {c.source_file_name} · 相似度 {(c.score * 100).toFixed(0)}%
+                      </p>
+                    )}
                   </li>
                 ))}
             </ul>
