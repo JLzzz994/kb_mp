@@ -1,4 +1,6 @@
-"""kb_mp 数据库种子：3 部门 + 3 角色 + 17 权限码 + 3 用户。
+"""慧策 ERP/WMS 产品知识运营平台数据库种子。
+
+初始化产品、实施、客服、客户成功四类业务团队，以及系统管理员、知识管理员和业务查询用户。
 
 > ADR-0003 决策 2：默认无参仅插入缺失项；--reset 清表后重灌。
 > 使用方法：
@@ -27,18 +29,26 @@ from app.infrastructure.database import (
 from app.infrastructure.password_hasher import PasswordHasher
 
 DEPARTMENTS = [
-    {"name": "研发中心", "parent_id": None, "sort_order": 0},
-    {"name": "产品部", "parent_id": None, "sort_order": 1},
-    {"name": "运营部", "parent_id": None, "sort_order": 2},
+    {"name": "产品中心", "parent_id": None, "sort_order": 0},
+    {"name": "实施交付中心", "parent_id": None, "sort_order": 1},
+    {"name": "商家客服中心", "parent_id": None, "sort_order": 2},
+    {"name": "客户成功中心", "parent_id": None, "sort_order": 3},
 ]
 
 ROLES = [
-    {"role_name": "系统管理员", "role_code": "system_admin", "description": "全权限"},
-    {"role_name": "知识管理员", "role_code": "knowledge_admin", "description": "知识管理子集"},
-    {"role_name": "普通用户", "role_code": "regular_user", "description": "仅 AI + 知识查询"},
+    {"role_name": "系统管理员", "role_code": "system_admin", "description": "平台与组织全权限"},
+    {
+        "role_name": "产品知识管理员",
+        "role_code": "knowledge_admin",
+        "description": "产品文档、FAQ、知识缺口与权限运营",
+    },
+    {
+        "role_name": "业务查询用户",
+        "role_code": "regular_user",
+        "description": "实施、客服、客户成功的知识查询角色",
+    },
 ]
 
-# 知识管理员权限（不含 user/role/dept 管理类）
 KNOWLEDGE_ADMIN_CODES = [
     PermissionCode.KNOWLEDGE_READ,
     PermissionCode.KNOWLEDGE_WRITE,
@@ -63,22 +73,22 @@ REGULAR_USER_CODES = [
 USERS = [
     {
         "username": "admin",
-        "display_name": "系统管理员",
+        "display_name": "平台管理员",
         "dept_index": 0,
         "role_code": "system_admin",
         "password": "Admin@123",
     },
     {
         "username": "kadmin",
-        "display_name": "知识管理员",
+        "display_name": "产品知识管理员",
         "dept_index": 0,
         "role_code": "knowledge_admin",
         "password": "Kadmin@123",
     },
     {
         "username": "alice",
-        "display_name": "Alice",
-        "dept_index": 2,
+        "display_name": "实施顾问演示用户",
+        "dept_index": 1,
         "role_code": "regular_user",
         "password": "Alice@123",
     },
@@ -93,8 +103,8 @@ async def reset_all(session: AsyncSession) -> None:
 
 
 async def seed_departments(session: AsyncSession) -> dict[int, int]:
-    """插入部门，返回 name → id 映射。"""
-    name_to_id: dict[int, int] = {}
+    """插入部门，返回 index → id 映射。"""
+    index_to_id: dict[int, int] = {}
     for i, d in enumerate(DEPARTMENTS):
         existing = (
             await session.execute(
@@ -110,11 +120,11 @@ async def seed_departments(session: AsyncSession) -> dict[int, int]:
             )
             session.add(rec)
             await session.flush()
-            name_to_id[i] = rec.id
+            index_to_id[i] = rec.id
         else:
-            name_to_id[i] = existing.id
+            index_to_id[i] = existing.id
     await session.commit()
-    return name_to_id
+    return index_to_id
 
 
 async def seed_roles(session: AsyncSession) -> dict[str, int]:
@@ -136,7 +146,6 @@ async def seed_roles(session: AsyncSession) -> dict[str, int]:
         else:
             code_to_id[r["role_code"]] = existing.id
 
-        # 权限码（幂等：删除后重建）
         role_id = code_to_id[r["role_code"]]
         await session.execute(
             RolePermissionRecord.__table__.delete().where(RolePermissionRecord.role_id == role_id)
@@ -163,7 +172,7 @@ async def seed_users(
     role_ids: dict[str, int],
     hasher: PasswordHasher,
 ) -> None:
-    """插入 3 个用户。"""
+    """插入演示用户。"""
     for u in USERS:
         existing = (
             await session.execute(select(UserRecord).where(UserRecord.username == u["username"]))
@@ -182,9 +191,10 @@ async def seed_users(
         else:
             user_id = existing.id
             existing.password_hash = hasher.hash(u["password"])
+            existing.display_name = u["display_name"]
+            existing.department_id = dept_ids[u["dept_index"]]
             await session.flush()
 
-        # user_roles（幂等）
         await session.execute(
             UserRoleRecord.__table__.delete().where(UserRoleRecord.user_id == user_id)
         )
@@ -206,7 +216,7 @@ async def main_async(reset: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="kb_mp seed")
+    parser = argparse.ArgumentParser(description="Huice ERP/WMS knowledge platform seed")
     parser.add_argument(
         "--reset",
         action="store_true",
