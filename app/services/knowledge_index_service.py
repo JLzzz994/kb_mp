@@ -63,7 +63,7 @@ class KnowledgeIndexService:
         if record is None:
             raise KnowledgeUnitNotFoundError(f"id={unit_id}")
 
-        if not self.vector_configured:
+        if self._milvus is None:
             if record.status != "active":
                 await self._repo.update(unit_id, status="active")
                 await self._session.commit()
@@ -74,6 +74,13 @@ class KnowledgeIndexService:
                 chunk_count=None,
                 consistent=True,
                 detail="vector backend disabled; lexical retrieval remains active",
+            )
+
+        if self._embedding is None:
+            await self._repo.update(unit_id, status="vector_pending")
+            await self._session.commit()
+            raise KnowledgeIndexSyncError(
+                f"unit_id={unit_id}: embedding backend unavailable"
             )
 
         await self._repo.update(unit_id, status="vector_pending")
