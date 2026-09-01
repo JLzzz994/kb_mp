@@ -58,11 +58,18 @@
 - 产品/实施/客服/客户成功组织模型；
 - FAQ、知识缺口、SSE 引用等原能力的业务映射。
 
-当前分支还没有完整做实：
+当前分支已经补齐混合检索增强：
 
-- HyDE + 关键词/向量双路召回 + RRF；
-- 独立 BGE-Reranker 推理服务；
+- Query Rewrite + HyDE 检索规划；
+- MySQL 关键词召回 + Milvus rewrite/HyDE 双向量召回；
+- RRF 跨通道排名融合；
+- BGE-Reranker 可配置精排与动态断崖截断；
+- reranker 不可用时自动回退 RRF 排名。
+
+当前仍未完整做实：
+
 - MinerU 真实解析链路；
+- RAGAS/固定评测集与 bad case 回流；
 - Vue 3 前端迁移。
 
 面试时不要把“规划中的增强项”说成这个分支已经存在的代码。
