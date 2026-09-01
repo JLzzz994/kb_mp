@@ -79,6 +79,64 @@ class KnowledgeUnitRepository:
         rows = (await self._session.execute(stmt)).all()
         return [(row[0], row[1] or "", int(row[2])) for row in rows], total
 
+    async def search_keyword(
+        self,
+        terms: list[str] | tuple[str, ...],
+        *,
+        limit: int = 20,
+    ) -> list[tuple[KnowledgeUnitRecord, float]]:
+        """关键词召回：MySQL LIKE 候选 + Python 字段加权评分。
+
+        这是结构化产品知识的轻量 lexical channel，不与向量分数直接比较；
+        后续统一通过 RRF 按排名融合。
+        """
+        normalized = [str(t).strip() for t in terms if str(t).strip()]
+        if not normalized:
+            return []
+
+        conditions = []
+        for term in normalized[:8]:
+            like = f"%{term}%"
+            conditions.append(
+                or_(
+                    KnowledgeUnitRecord.title.like(like),
+                    KnowledgeUnitRecord.summary.like(like),
+                    KnowledgeUnitRecord.content.like(like),
+                    KnowledgeUnitRecord.category.like(like),
+                )
+            )
+
+        stmt = (
+            select(KnowledgeUnitRecord)
+            .where(KnowledgeUnitRecord.status == "active", or_(*conditions))
+            .order_by(KnowledgeUnitRecord.updated_at.desc(), KnowledgeUnitRecord.id.desc())
+            .limit(max(limit * 3, limit))
+        )
+        records = list((await self._session.execute(stmt)).scalars().all())
+
+        scored: list[tuple[KnowledgeUnitRecord, float]] = []
+        for record in records:
+            title = (record.title or "").lower()
+            summary = (record.summary or "").lower()
+            content = (record.content or "").lower()
+            category = (record.category or "").lower()
+            score = 0.0
+            for term in normalized:
+                needle = term.lower()
+                if needle in title:
+                    score += 3.0
+                if needle in summary:
+                    score += 2.0
+                if needle in category:
+                    score += 1.5
+                if needle in content:
+                    score += 1.0
+            if score > 0:
+                scored.append((record, score))
+
+        scored.sort(key=lambda item: (-item[1], -int(item[0].id)))
+        return scored[:limit]
+
     async def list_by_ids(self, ids: list[int]) -> list[KnowledgeUnitRecord]:
         if not ids:
             return []
