@@ -24,7 +24,7 @@ def _row_to_citation(record, score: float) -> dict:
     }
 
 
-async def _keyword_recall(state: ChatState, ctx: GraphContext, terms: tuple[str, ...]) -> list[dict]:
+async def _keyword_recall(ctx: GraphContext, terms: tuple[str, ...]) -> list[dict]:
     if not terms:
         return []
     try:
@@ -65,7 +65,7 @@ async def retrieve_node(state: ChatState, ctx: GraphContext) -> ChatState:
     state["hyde_document"] = plan.hyde_document
     state["retrieval_terms"] = list(plan.keyword_terms)
 
-    keyword_channel = await _keyword_recall(state, ctx, plan.keyword_terms)
+    keyword_channel = await _keyword_recall(ctx, plan.keyword_terms)
     vector_rewrite_channel = await _vector_recall(plan.rewritten, ctx)
     vector_hyde_channel: list[dict] = []
     if settings.hyde_enabled:
