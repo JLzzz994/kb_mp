@@ -37,9 +37,7 @@ async def _run(args: argparse.Namespace) -> int:
         rows = list(
             (
                 await session.execute(
-                    select(KnowledgeUnitRecord)
-                    .order_by(KnowledgeUnitRecord.id)
-                    .limit(args.limit)
+                    select(KnowledgeUnitRecord).order_by(KnowledgeUnitRecord.id).limit(args.limit)
                 )
             )
             .scalars()
