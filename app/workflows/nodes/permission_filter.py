@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from app.repositories.knowledge_unit_repository import UnitPermissionRepository
+from app.repositories.knowledge_unit_repository import (
+    KnowledgeUnitRepository,
+    UnitPermissionRepository,
+)
 from app.services.knowledge_permission_service import (
     compute_user_permission_bitmap_sync,
 )
@@ -33,11 +36,19 @@ async def permission_filter_node(state: ChatState, ctx: GraphContext) -> ChatSta
 
     async with ctx.session_factory() as session:  # type: ignore[attr-defined]
         perm_repo = UnitPermissionRepository(session)
+        unit_repo = KnowledgeUnitRepository(session)
         all_perms = await perm_repo.list_all()
         authorized_ids = compute_user_permission_bitmap_sync(current_user, all_perms)
 
-    authorized = [c for c in citations if c["unit_id"] in authorized_ids]
-    unauthorized = sorted({c["unit_id"] for c in citations if c["unit_id"] not in authorized_ids})
+        candidate_ids = sorted({int(c["unit_id"]) for c in citations})
+        records = await unit_repo.list_by_ids(candidate_ids)
+        active_ids = {record.id for record in records if record.status == "active"}
+
+    active_citations = [c for c in citations if c["unit_id"] in active_ids]
+    authorized = [c for c in active_citations if c["unit_id"] in authorized_ids]
+    unauthorized = sorted(
+        {c["unit_id"] for c in active_citations if c["unit_id"] not in authorized_ids}
+    )
 
     state["authorized_citations"] = authorized
     state["unauthorized_unit_ids"] = unauthorized
