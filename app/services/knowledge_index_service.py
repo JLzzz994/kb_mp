@@ -79,9 +79,7 @@ class KnowledgeIndexService:
         if self._embedding is None:
             await self._repo.update(unit_id, status="vector_pending")
             await self._session.commit()
-            raise KnowledgeIndexSyncError(
-                f"unit_id={unit_id}: embedding backend unavailable"
-            )
+            raise KnowledgeIndexSyncError(f"unit_id={unit_id}: embedding backend unavailable")
 
         await self._repo.update(unit_id, status="vector_pending")
         await self._session.commit()
@@ -122,16 +120,14 @@ class KnowledgeIndexService:
             else:
                 vectors = [await self._embedding.embed(text) for text in texts]
 
-            content_hash = record.content_hash or hashlib.sha256(
-                record.content.encode("utf-8")
-            ).hexdigest()
+            content_hash = (
+                record.content_hash or hashlib.sha256(record.content.encode("utf-8")).hexdigest()
+            )
             generation = content_hash[:12]
             rows: list[dict] = []
             for chunk, vector in zip(chunks, vectors, strict=True):
                 section_title = (
-                    f"{record.title} / {chunk.section_path}"
-                    if chunk.section_path
-                    else record.title
+                    f"{record.title} / {chunk.section_path}" if chunk.section_path else record.title
                 )
                 rows.append(
                     {
