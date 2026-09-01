@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     # ── Milvus 远程服务 ─────────────────────────────
     # 演示期 mock；生产期指向远程 Milvus（兼容 docker / 独立部署）
     milvus_url: str = "http://39.105.7.90:19530"
-    milvus_collection: str = "kb_units"
+    milvus_collection: str = "kb_unit_chunks_v2"
     milvus_index_metric: str = "COSINE"
     milvus_index_m: int = 16
     milvus_index_ef_construction: int = 64
