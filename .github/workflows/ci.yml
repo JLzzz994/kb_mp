@@ -67,3 +67,27 @@ jobs:
       - name: Run all tests including e2e
         run: uv run pytest -v
         continue-on-error: true  # e2e 需要 Milvus + BGE-M3 真实服务，演示环境失败属正常
+
+  frontend:
+    name: frontend typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck and build
+        working-directory: frontend
+        run: npm run build
