@@ -19,14 +19,14 @@ import { useAuth } from "@/auth/AuthContext";
 
 /** 导航项 → 所需权限码（17 权限码驱动菜单可见性） */
 const NAV_ITEMS = [
-  { to: "/", label: "数据看板", icon: LayoutDashboard, permission: "dashboard:read", end: true },
+  { to: "/", label: "知识运营看板", icon: LayoutDashboard, permission: "dashboard:read", end: true },
   { to: "/users", label: "用户管理", icon: Users, permission: "user:read" },
   { to: "/roles", label: "角色与权限", icon: ShieldCheck, permission: "role:read" },
-  { to: "/departments", label: "部门管理", icon: Building2, permission: "dept:read" },
-  { to: "/knowledge/import", label: "知识导入", icon: FileUp, permission: "knowledge:write" },
-  { to: "/knowledge/units", label: "知识单元", icon: BookOpen, permission: "knowledge:read" },
-  { to: "/chat", label: "AI 工作台", icon: MessagesSquare, permission: "ai:chat" },
-  { to: "/faqs", label: "FAQ 管理", icon: CircleHelp, permission: "faq:read" },
+  { to: "/departments", label: "业务团队", icon: Building2, permission: "dept:read" },
+  { to: "/knowledge/import", label: "产品文档导入", icon: FileUp, permission: "knowledge:write" },
+  { to: "/knowledge/units", label: "知识资产", icon: BookOpen, permission: "knowledge:read" },
+  { to: "/chat", label: "ERP/WMS 智能问答", icon: MessagesSquare, permission: "ai:chat" },
+  { to: "/faqs", label: "FAQ 审核", icon: CircleHelp, permission: "faq:read" },
   { to: "/gaps", label: "知识缺口", icon: Target, permission: "gap:read" },
 ] as const;
 
@@ -46,13 +46,13 @@ export default function AppLayout() {
     <nav aria-label="主导航" className="flex h-full flex-col bg-navy text-white/90">
       <div className="flex items-center gap-2.5 px-5 py-5">
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-display text-lg font-extrabold text-navy-deep">
-          知
+          慧
         </span>
         <div>
           <p className="font-display text-[15px] font-extrabold tracking-tight text-white">
-            知识库管理平台
+            ERP/WMS 产品知识运营
           </p>
-          <p className="text-xs text-white/50">Knowledge Base Platform</p>
+          <p className="text-xs text-white/50">Huice Knowledge Operations</p>
         </div>
       </div>
 
@@ -110,10 +110,8 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen">
-      {/* 桌面侧栏 */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 lg:block">{sidebar}</aside>
 
-      {/* 移动端抽屉 */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
           <button
@@ -135,7 +133,6 @@ export default function AppLayout() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 移动端顶栏 */}
         <div className="sticky top-0 z-40 flex items-center gap-3 border-b border-boundary bg-mist/90 px-4 py-3 backdrop-blur lg:hidden">
           <button
             aria-label="打开导航"
@@ -144,7 +141,7 @@ export default function AppLayout() {
           >
             <Menu className="h-5 w-5" aria-hidden />
           </button>
-          <span className="font-display font-extrabold text-ink">知识库管理平台</span>
+          <span className="font-display font-extrabold text-ink">ERP/WMS 产品知识运营平台</span>
         </div>
 
         <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
