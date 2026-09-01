@@ -107,7 +107,7 @@ seed 数据调整为：
 | FAQ 审核 | 已有 |
 | 知识缺口 | 已有 |
 | SSE 引用返回 | 已有 |
-| HyDE / RRF / BGE-Reranker | **当前代码未完整实现，不能仅凭文档宣称已落地** |
+| Query Rewrite / HyDE / RRF / BGE-Reranker | 已落地：关键词 + rewrite 向量 + HyDE 向量三路召回，RRF 融合，BGE 可配置精排 |
 | MinerU | 需继续补真实解析接入 |
 | Vue 3 | 当前代码为 React，需继续迁移 |
 
@@ -142,10 +142,26 @@ uv run ruff check .
 uv run pytest -v --ignore=tests/test_e2e_t7_real_vectorize.py
 ```
 
+## 当前混合检索链路
+
+```text
+用户问题
+  -> Query Rewrite
+  -> HyDE hypothetical document
+  -> MySQL keyword recall ------------------┐
+  -> Milvus(rewritten query) vector recall -+-> RRF -> BGE-Reranker -> 动态截断
+  -> Milvus(HyDE document) vector recall ----┘
+  -> 四维权限过滤
+  -> Prompt
+  -> LLM + citation
+```
+
+RRF 只使用各通道排名，不直接比较 MySQL 关键词分数与 Milvus cosine score；BGE-Reranker 开启后使用交叉编码器分数重新排序。模型不可用时自动退回 RRF 排名，不阻断主链路。
+
 ## 后续建议
 
-为了让仓库与最新版简历完全一致，建议继续完成三项代码改造：
+为了让仓库与最新版简历进一步一致，下一阶段建议：
 
-1. 将当前单路 Milvus ANN 召回升级为 Query Rewrite / HyDE + 关键词/向量双路召回 + RRF。
-2. 接入真实 BGE-Reranker，并把当前基于 score 的动态截断放到 rerank 之后。
-3. 把 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
+1. 接入 MinerU 作为 PDF/复杂文档真实解析链路，并保留页码、标题层级和表格结构元数据。
+2. 增加 RAGAS/固定评测集与 bad case 回流，量化 Recall@K、MRR、Faithfulness 和答案采纳率。
+3. 把当前 React 前端正式迁移到 Vue 3，并保留现有产品知识运营交互。
