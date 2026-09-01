@@ -18,28 +18,31 @@ def reciprocal_rank_fusion(
     if rrf_k <= 0:
         raise ValueError("rrf_k must be positive")
 
-    fused_scores: dict[int, float] = {}
-    payloads: dict[int, dict] = {}
+    fused_scores: dict[str, float] = {}
+    payloads: dict[str, dict] = {}
 
     for channel in ranked_channels:
-        seen_in_channel: set[int] = set()
+        seen_in_channel: set[str] = set()
         for rank, item in enumerate(channel, start=1):
             unit_id = int(item["unit_id"])
-            if unit_id in seen_in_channel:
+            result_key = str(item.get("chunk_id") or f"unit:{unit_id}")
+            if result_key in seen_in_channel:
                 continue
-            seen_in_channel.add(unit_id)
-            fused_scores[unit_id] = fused_scores.get(unit_id, 0.0) + 1.0 / (rrf_k + rank)
-            payloads.setdefault(unit_id, dict(item))
+            seen_in_channel.add(result_key)
+            fused_scores[result_key] = (
+                fused_scores.get(result_key, 0.0) + 1.0 / (rrf_k + rank)
+            )
+            payloads.setdefault(result_key, dict(item))
 
     if not fused_scores:
         return []
 
-    ordered_ids = sorted(fused_scores, key=fused_scores.__getitem__, reverse=True)[:limit]
-    max_score = fused_scores[ordered_ids[0]]
+    ordered_keys = sorted(fused_scores, key=fused_scores.__getitem__, reverse=True)[:limit]
+    max_score = fused_scores[ordered_keys[0]]
     results: list[dict] = []
-    for unit_id in ordered_ids:
-        item = dict(payloads[unit_id])
-        item["score"] = fused_scores[unit_id] / max_score if max_score else 0.0
+    for result_key in ordered_keys:
+        item = dict(payloads[result_key])
+        item["score"] = fused_scores[result_key] / max_score if max_score else 0.0
         results.append(item)
     return results
 
