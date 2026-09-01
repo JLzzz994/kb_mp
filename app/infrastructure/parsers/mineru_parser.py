@@ -13,7 +13,6 @@ from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument
 from app.infrastructure.parsers.base_parser import ParseError
 
-
 _AUXILIARY_TYPES = {
     "header",
     "footer",
