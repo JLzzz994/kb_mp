@@ -70,9 +70,9 @@ class KnowledgeIndexService:
         document = parsed_document_from_text(record.content, parser_name="reindex_text")
         chunks = self._splitter.split(document)
         if not chunks:
-            chunks = self._splitter.split(
-                parsed_document_from_text(record.content.strip(), parser_name="reindex_text")
-            )
+            await self._repo.update(unit_id, status="vector_pending")
+            await self._session.commit()
+            raise KnowledgeIndexSyncError(f"unit_id={unit_id}: empty content")
 
         try:
             texts = [chunk.text for chunk in chunks]
@@ -164,8 +164,19 @@ class KnowledgeIndexService:
                 category=record.category,
                 source_file_name=record.source_file_name,
             )
-            if count == 0 and self._embedding is not None:
-                return await self.rebuild_unit(unit_id)
+            if count == 0:
+                if self._embedding is not None:
+                    return await self.rebuild_unit(unit_id)
+                await self._repo.update(unit_id, status="vector_pending")
+                await self._session.commit()
+                return KnowledgeIndexStatus(
+                    unit_id=unit_id,
+                    configured=True,
+                    db_status="vector_pending",
+                    chunk_count=0,
+                    consistent=False,
+                    detail="index missing and embedding backend unavailable",
+                )
 
             await self._repo.update(unit_id, status="active")
             await self._session.commit()
