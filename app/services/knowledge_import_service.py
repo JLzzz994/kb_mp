@@ -62,11 +62,7 @@ def _extract_title_and_summary(text: str, filename: str) -> tuple[str, str | Non
 
 def _legacy_parsed_document(raw_text: str) -> ParsedDocument:
     """Compatibility for injected test parser factories that only expose parse()."""
-    blocks = [
-        DocumentBlock(text=part.strip())
-        for part in raw_text.split("\n\n")
-        if part.strip()
-    ]
+    blocks = [DocumentBlock(text=part.strip()) for part in raw_text.split("\n\n") if part.strip()]
     return ParsedDocument(text=raw_text, blocks=blocks, parser_name="legacy")
 
 
