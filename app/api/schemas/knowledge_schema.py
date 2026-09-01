@@ -64,6 +64,15 @@ class BatchDeleteRequest(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=200)
 
 
+class KnowledgeIndexStatusResponse(BaseModel):
+    unit_id: int
+    configured: bool
+    db_status: str
+    chunk_count: int | None
+    consistent: bool
+    detail: str = ""
+
+
 # ── check-permissions 共享接口 ─────────────────────────────
 
 
@@ -85,6 +94,7 @@ __all__ = [
     "KnowledgeUnitListResponse",
     "KnowledgeUnitPatch",
     "BatchDeleteRequest",
+    "KnowledgeIndexStatusResponse",
     "CheckPermissionsRequest",
     "CheckPermissionsResponse",
 ]
