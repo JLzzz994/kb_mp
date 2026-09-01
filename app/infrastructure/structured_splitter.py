@@ -26,7 +26,7 @@ class StructuredSplitter:
         buffer_chars = 0
         current_section = ""
 
-        def flush() -> None:
+        def flush(*, keep_overlap: bool = True) -> None:
             nonlocal buffer, buffer_chars
             if not buffer:
                 return
@@ -47,7 +47,7 @@ class StructuredSplitter:
                     block_types=block_types,
                 )
             )
-            buffer = self._overlap_tail(buffer)
+            buffer = self._overlap_tail(buffer) if keep_overlap else []
             buffer_chars = sum(len(block.text) for block in buffer)
 
         for block in document.blocks:
@@ -56,7 +56,7 @@ class StructuredSplitter:
                 continue
 
             if block.heading_level > 0:
-                flush()
+                flush(keep_overlap=False)
                 level = min(block.heading_level, 6)
                 section_stack[:] = section_stack[: level - 1]
                 while len(section_stack) < level - 1:
