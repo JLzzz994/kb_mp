@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import shutil
 import subprocess
 import tempfile
-import pathlib
 
 from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument
