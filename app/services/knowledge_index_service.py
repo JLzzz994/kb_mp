@@ -9,7 +9,12 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import KnowledgeIndexSyncError, KnowledgeUnitNotFoundError
-from app.infrastructure.parser_factory import parsed_document_from_text
+from app.infrastructure.file_storage import find_unit_source
+from app.infrastructure.parser_factory import (
+    ParserFactory,
+    get_parser_factory,
+    parsed_document_from_text,
+)
 from app.infrastructure.structured_splitter import StructuredSplitter
 from app.repositories.knowledge_unit_repository import KnowledgeUnitRepository
 
@@ -34,18 +39,25 @@ class KnowledgeIndexService:
         embedding=None,
         milvus=None,
         splitter: StructuredSplitter | None = None,
+        parser_factory: ParserFactory | None = None,
     ) -> None:
         self._session = session
         self._repo = KnowledgeUnitRepository(session)
         self._embedding = embedding
         self._milvus = milvus
         self._splitter = splitter or StructuredSplitter()
+        self._parser_factory = parser_factory or get_parser_factory()
 
     @property
     def vector_configured(self) -> bool:
         return self._embedding is not None and self._milvus is not None
 
-    async def rebuild_unit(self, unit_id: int) -> KnowledgeIndexStatus:
+    async def rebuild_unit(
+        self,
+        unit_id: int,
+        *,
+        prefer_source: bool = True,
+    ) -> KnowledgeIndexStatus:
         """Rebuild only one unit's chunks; never rebuild the whole collection."""
         record = await self._repo.find_by_id(unit_id)
         if record is None:
@@ -68,6 +80,28 @@ class KnowledgeIndexService:
         await self._session.commit()
 
         document = parsed_document_from_text(record.content, parser_name="reindex_text")
+        if prefer_source:
+            source_path = find_unit_source(record.unit_code, record.file_type)
+            if source_path is not None:
+                try:
+                    source_document = self._parser_factory.parse_document(source_path)
+                    source_text = source_document.text.strip()
+                    source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+                    if source_hash == record.content_hash:
+                        document = source_document
+                    else:
+                        logger.warning(
+                            "knowledge.index.source_stale unit_id={} source={}",
+                            unit_id,
+                            source_path,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "knowledge.index.source_reparse.failed unit_id={} error={}",
+                        unit_id,
+                        exc,
+                    )
+
         chunks = self._splitter.split(document)
         if not chunks:
             await self._repo.update(unit_id, status="vector_pending")
