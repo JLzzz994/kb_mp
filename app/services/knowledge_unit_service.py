@@ -31,6 +31,7 @@ from app.infrastructure.database import (
     RoleRecord,
     UserRecord,
 )
+from app.infrastructure.file_storage import remove_unit_source
 from app.repositories.knowledge_unit_repository import (
     KnowledgeUnitRepository,
     UnitPermissionRepository,
@@ -256,7 +257,7 @@ class KnowledgeUnitService:
         await self._session.commit()
 
         if content_changed:
-            await self._index_service.rebuild_unit(unit_id)
+            await self._index_service.rebuild_unit(unit_id, prefer_source=False)
         elif metadata_changed:
             await self._index_service.sync_metadata(unit_id)
 
@@ -272,9 +273,14 @@ class KnowledgeUnitService:
         return await self.get(unit_id)
 
     async def batch_delete(self, req: BatchDeleteRequest) -> int:
+        records = await self._unit_repo.list_by_ids(req.ids)
         await self._index_service.delete_units(req.ids)
         deleted = await self._unit_repo.delete_by_ids(req.ids)
         await self._session.commit()
+
+        for record in records:
+            remove_unit_source(record.unit_code, record.file_type)
+
         logger.warning("knowledge.unit.batch_delete count={}", deleted)
         return deleted
 
