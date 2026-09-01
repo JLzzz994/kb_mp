@@ -91,10 +91,19 @@
 
 这里的“增量重建”明确是 **知识单元级增量**，不是 chunk-diff 算法，不在面试中扩大描述。
 
+前端技术栈也已与简历对齐：
+
+- React/TSX 已迁移为 Vue 3 + TypeScript；
+- Vue Router 负责路由与登录守卫；
+- Pinia 管理用户会话和权限码；
+- 产品文档导入、知识资产、ERP/WMS 问答已迁移为 Vue SFC；
+- Dashboard 使用 ECharts 展示 Token 与响应时间趋势；
+- React、react-router-dom、lucide-react 和 TSX 残留扫描为 0。
+
 当前仍未完整做实：
 
-- Vue 3 前端迁移；
 - 多实例部署下的 MinIO/object storage 源文件版本管理；
-- 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）。
+- 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）；
+- 用户、角色、部门、FAQ、知识缺口几个管理页当前仍以占位交互为主，不能在面试中描述成完整后台 CRUD。
 
 面试时不要把“规划中的增强项”说成这个分支已经存在的代码。
