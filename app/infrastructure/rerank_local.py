@@ -54,9 +54,7 @@ class LocalBGERerank:
             self._model = CrossEncoder(self._model_path, device=self._device)
             return self._model
         except ImportError as exc:
-            raise RuntimeError(
-                "reranker requires FlagEmbedding or sentence-transformers"
-            ) from exc
+            raise RuntimeError("reranker requires FlagEmbedding or sentence-transformers") from exc
 
     async def rerank(
         self, query: str, documents: list[str], top_k: int | None = None
