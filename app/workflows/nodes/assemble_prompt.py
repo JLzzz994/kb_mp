@@ -23,7 +23,19 @@ async def assemble_prompt_node(state: ChatState, ctx: GraphContext) -> ChatState
 
     parts = [system_prompt, "\n\n# 已鉴权知识片段\n"]
     for c in citations:
-        parts.append(f"- [{c['unit_id']}] {c['title']}: {c['content']}\n")
+        page_start = c.get("page_start")
+        page_end = c.get("page_end")
+        if page_start and page_end and page_start != page_end:
+            page_label = f" p{page_start}-{page_end}"
+        elif page_start:
+            page_label = f" p{page_start}"
+        else:
+            page_label = ""
+        section = c.get("section_path") or ""
+        section_label = f" §{section}" if section else ""
+        parts.append(
+            f"- [{c['unit_id']}]{page_label}{section_label} {c['title']}: {c['content']}\n"
+        )
     parts.append("\n# 对话历史\n")
     for turn in history:
         parts.append(f"{turn.get('role', 'user')}: {turn.get('content', '')}\n")
