@@ -1,8 +1,4 @@
-"""Milvus 远程网关（独立部署 / docker 远程 URL）。
-
-> 部署：环境变量 MILVUS_URL=http://host:19530 指向远程 Milvus。
-> 演示期：URL 不可达 → MilvusGateway 构造失败但 lifespan 仍启动（向后兼容 mock）。
-"""
+"""Milvus chunk-level vector gateway for ERP/WMS product knowledge."""
 
 from __future__ import annotations
 
@@ -14,62 +10,69 @@ logger = logging.getLogger(__name__)
 
 
 class MilvusGateway:
-    """Milvus 远程搜索 gateway（实现 MilvusSearchPort Protocol）。"""
+    """Store multiple chunks per knowledge unit while permissions stay unit-scoped."""
 
     def __init__(self, uri: str | None = None, collection: str | None = None) -> None:
         self._uri = uri or settings.milvus_url
         self._collection = collection or settings.milvus_collection
         self._collection_obj = None
-        self._ensure_attempted = False
 
     def _ensure_collection(self):
-        """lazy connect：第一次 search 时才 connect + 加载 collection。"""
         if self._collection_obj is not None:
             return self._collection_obj
         try:
             from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections
         except ImportError as exc:
-            raise RuntimeError("pymilvus not installed. `uv pip install pymilvus`") from exc
+            raise RuntimeError("pymilvus not installed. install pymilvus first") from exc
+
         try:
             connections.connect(uri=self._uri)
             try:
-                self._collection_obj = Collection(self._collection)
+                collection = Collection(self._collection)
+                field_names = {field.name for field in collection.schema.fields}
+                if not {"chunk_id", "unit_id", "embedding"}.issubset(field_names):
+                    raise RuntimeError(
+                        f"Milvus collection {self._collection!r} uses legacy schema; "
+                        "use a new chunk-level collection such as kb_unit_chunks_v2"
+                    )
+                self._collection_obj = collection
+            except RuntimeError:
+                raise
             except Exception:
-                # 集合不存在 → 自动创建 + 索引
-                logger.info(
-                    "milvus.collection.create name=%s",
-                    self._collection,
-                )
+                logger.info("milvus.collection.create name=%s", self._collection)
                 fields = [
                     FieldSchema(
-                        name="unit_id",
-                        dtype=DataType.INT64,
+                        name="chunk_id",
+                        dtype=DataType.VARCHAR,
+                        max_length=96,
                         is_primary=True,
                     ),
+                    FieldSchema(name="unit_id", dtype=DataType.INT64),
+                    FieldSchema(name="chunk_index", dtype=DataType.INT64),
+                    FieldSchema(name="page_start", dtype=DataType.INT64),
+                    FieldSchema(name="page_end", dtype=DataType.INT64),
                     FieldSchema(
                         name="embedding",
                         dtype=DataType.FLOAT_VECTOR,
                         dim=settings.embedding_dim,
                     ),
+                    FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=512),
+                    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=16384),
+                    FieldSchema(name="category", dtype=DataType.VARCHAR, max_length=128),
                     FieldSchema(
-                        name="title",
+                        name="source_file_name",
                         dtype=DataType.VARCHAR,
                         max_length=512,
                     ),
                     FieldSchema(
-                        name="content",
+                        name="section_path",
                         dtype=DataType.VARCHAR,
-                        max_length=8192,
+                        max_length=1024,
                     ),
-                    FieldSchema(
-                        name="category",
-                        dtype=DataType.VARCHAR,
-                        max_length=128,
-                    ),
+                    FieldSchema(name="block_types", dtype=DataType.VARCHAR, max_length=256),
                 ]
-                schema = CollectionSchema(fields, description="kb_mp knowledge units")
+                schema = CollectionSchema(fields, description="kb_mp structured knowledge chunks")
                 self._collection_obj = Collection(self._collection, schema=schema)
-                # 建 HNSW 索引（spec §8：HNSW + COSINE）
                 self._collection_obj.create_index(
                     field_name="embedding",
                     index_params={
@@ -82,7 +85,6 @@ class MilvusGateway:
                     },
                 )
             self._collection_obj.load()
-            self._ensure_attempted = True
         except Exception as exc:
             logger.error("milvus.connect.failed uri=%s error=%s", self._uri, exc)
             raise
@@ -90,24 +92,69 @@ class MilvusGateway:
 
     async def search(self, query_embedding: list[float], top_k: int = 20) -> list[dict]:
         coll = self._ensure_collection()
-        # pymilvus .search 同步；演示期 accept，未来可包线程池
         results = coll.search(
             data=[query_embedding],
             anns_field="embedding",
             param={"metric_type": settings.milvus_index_metric},
             limit=top_k,
-            output_fields=["unit_id", "title", "content", "category"],
+            output_fields=[
+                "chunk_id",
+                "unit_id",
+                "chunk_index",
+                "page_start",
+                "page_end",
+                "title",
+                "content",
+                "category",
+                "source_file_name",
+                "section_path",
+                "block_types",
+            ],
         )
         hits = results[0] if results else []
         return [
             {
+                "chunk_id": str(hit.entity.get("chunk_id") or ""),
                 "unit_id": int(hit.entity.get("unit_id")),
+                "chunk_index": int(hit.entity.get("chunk_index") or 0),
+                "page_start": int(hit.entity.get("page_start") or 0) or None,
+                "page_end": int(hit.entity.get("page_end") or 0) or None,
                 "title": str(hit.entity.get("title") or ""),
                 "score": float(hit.distance),
                 "content": str(hit.entity.get("content") or ""),
+                "category": str(hit.entity.get("category") or ""),
+                "source_file_name": str(hit.entity.get("source_file_name") or ""),
+                "section_path": str(hit.entity.get("section_path") or ""),
+                "block_types": str(hit.entity.get("block_types") or ""),
             }
             for hit in hits
         ]
+
+    async def upsert_chunks(self, chunks: list[dict]) -> None:
+        """Batch upsert pre-embedded structured chunks."""
+        if not chunks:
+            return
+        coll = self._ensure_collection()
+        rows: list[dict] = []
+        for chunk in chunks:
+            rows.append(
+                {
+                    "chunk_id": str(chunk["chunk_id"]),
+                    "unit_id": int(chunk["unit_id"]),
+                    "chunk_index": int(chunk.get("chunk_index") or 0),
+                    "page_start": int(chunk.get("page_start") or 0),
+                    "page_end": int(chunk.get("page_end") or 0),
+                    "embedding": chunk["embedding"],
+                    "title": str(chunk.get("title") or "")[:512],
+                    "content": str(chunk.get("content") or "")[:16384],
+                    "category": str(chunk.get("category") or "")[:128],
+                    "source_file_name": str(chunk.get("source_file_name") or "")[:512],
+                    "section_path": str(chunk.get("section_path") or "")[:1024],
+                    "block_types": str(chunk.get("block_types") or "")[:256],
+                }
+            )
+        coll.upsert(rows)
+        coll.flush()
 
     async def upsert(
         self,
@@ -117,12 +164,13 @@ class MilvusGateway:
         content: str = "",
         category: str | None = None,
     ) -> None:
-        """导入时后台异步 upsert（demo / production 通用）。"""
-        coll = self._ensure_collection()
-        coll.upsert(
+        """Backward-compatible single-chunk upsert used by older tests/callers."""
+        await self.upsert_chunks(
             [
                 {
+                    "chunk_id": f"{unit_id}:0",
                     "unit_id": unit_id,
+                    "chunk_index": 0,
                     "embedding": embedding,
                     "title": title,
                     "content": content,
@@ -130,14 +178,12 @@ class MilvusGateway:
                 }
             ]
         )
-        coll.flush()
 
     async def delete_by_unit_ids(self, unit_ids: list[int]) -> None:
         if not unit_ids:
             return
         coll = self._ensure_collection()
-        expr = f"unit_id in {unit_ids}"
-        coll.delete(expr)
+        coll.delete(f"unit_id in {unit_ids}")
 
 
 __all__ = ["MilvusGateway"]
