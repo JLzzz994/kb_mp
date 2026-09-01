@@ -42,9 +42,18 @@ export interface ImportTaskResponse {
   rejected: Array<{ filename: string; reason: string }>;
 }
 
+export interface KnowledgeIndexStatus {
+  unit_id: number;
+  configured: boolean;
+  db_status: string;
+  chunk_count: number | null;
+  consistent: boolean;
+  detail: string;
+}
+
 export async function importFiles(files: File[]): Promise<ImportTaskResponse> {
   const form = new FormData();
-  for (const f of files) form.append("files", f);
+  for (const file of files) form.append("files", file);
   const { data } = await http.post<ImportTaskResponse>("/knowledge/import", form, {
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 120_000,
@@ -72,23 +81,24 @@ export interface UnitPatchInput {
   tags?: string[];
 }
 
-export async function patchKnowledgeUnit(id: number, input: UnitPatchInput): Promise<KnowledgeUnitDetail> {
+export async function patchKnowledgeUnit(
+  id: number,
+  input: UnitPatchInput,
+): Promise<KnowledgeUnitDetail> {
   const { data } = await http.patch<KnowledgeUnitDetail>(`/knowledge-units/${id}`, input);
   return data;
 }
 
-/** 批量删除：ids 上限按接口约定文档 §7.3 取 1–100（M3 spec 写 200，文档矛盾从严控制） */
-export async function batchDeleteUnits(ids: number[]): Promise<{
-  succeeded: number[];
-  failed: Array<{ id: number; error_code: string }>;
-}> {
-  const { data } = await http.delete("/knowledge-units", { data: { ids } });
-  return data;
+export async function batchDeleteUnits(ids: number[]): Promise<void> {
+  await http.delete("/knowledge-units", { data: { ids } });
 }
 
 export async function configureUnitPermissions(
   id: number,
-  permissions: Array<{ target_type: PermissionEntry["target_type"]; target_id: number | null }>,
+  permissions: Array<{
+    target_type: PermissionEntry["target_type"];
+    target_id: number | null;
+  }>,
 ): Promise<void> {
   await http.post(`/knowledge-units/${id}/permissions`, { permissions });
 }
@@ -98,5 +108,19 @@ export async function checkPermissions(
   unit_ids: number[],
 ): Promise<{ authorized_unit_ids: number[]; unauthorized_unit_ids: number[] }> {
   const { data } = await http.post("/knowledge/check-permissions", { user_id, unit_ids });
+  return data;
+}
+
+export async function getKnowledgeIndexStatus(id: number): Promise<KnowledgeIndexStatus> {
+  const { data } = await http.get<KnowledgeIndexStatus>(
+    `/knowledge-units/${id}/index-status`,
+  );
+  return data;
+}
+
+export async function reindexKnowledgeUnit(id: number): Promise<KnowledgeIndexStatus> {
+  const { data } = await http.post<KnowledgeIndexStatus>(
+    `/knowledge-units/${id}/reindex`,
+  );
   return data;
 }
