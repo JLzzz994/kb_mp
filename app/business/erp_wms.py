@@ -70,7 +70,7 @@ def demo_citations(question: str) -> list[dict]:
     primary = domains[0] if domains else "订单履约"
     return [
         {
-            "unit_id": 1001,
+            "unit_id": 1,
             "title": f"[demo] {primary}产品操作说明",
             "score": 0.86,
             "content": (
@@ -79,7 +79,7 @@ def demo_citations(question: str) -> list[dict]:
             ),
         },
         {
-            "unit_id": 1002,
+            "unit_id": 2,
             "title": "[demo] ERP/WMS 异常排查与升级规范",
             "score": 0.78,
             "content": (
