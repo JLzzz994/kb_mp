@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     bge_reranker_device: str = "cpu"
     bge_reranker_fp16: bool = False
 
+    # ── 混合检索 / RRF / 动态截断 ─────────────────────────────
+    query_rewrite_enabled: bool = True
+    hyde_enabled: bool = True
+    retrieval_keyword_top_k: int = 20
+    retrieval_vector_top_k: int = 20
+    retrieval_fused_top_k: int = 20
+    retrieval_rrf_k: int = 60
+    rerank_top_k: int = 8
+    rerank_min_keep: int = 2
+    rerank_cliff_ratio: float = 0.75
+    rerank_min_score: float = 0.2
+
     # ── Milvus 远程服务 ─────────────────────────────
     # 演示期 mock；生产期指向远程 Milvus（兼容 docker / 独立部署）
     milvus_url: str = "http://39.105.7.90:19530"
