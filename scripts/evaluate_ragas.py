@@ -105,17 +105,27 @@ async def _run(args: argparse.Namespace) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(args.output, index=False)
 
-    metric_thresholds = {
+    configured_thresholds = {
         "context_precision": args.min_context_precision,
         "context_recall": args.min_context_recall,
         "faithfulness": args.min_faithfulness,
         "factual_correctness": args.min_factual_correctness,
     }
+    metric_columns: dict[str, str] = {}
+    for metric_name in configured_thresholds:
+        if metric_name in frame.columns:
+            metric_columns[metric_name] = metric_name
+            continue
+        matches = [str(column) for column in frame.columns if str(column).startswith(metric_name)]
+        if not matches:
+            raise RuntimeError(f"Ragas result missing metric column: {metric_name}")
+        metric_columns[metric_name] = matches[0]
     bad_rows: list[dict] = []
     for record in frame.to_dict(orient="records"):
         reasons = []
-        for metric, threshold in metric_thresholds.items():
-            value = record.get(metric)
+        for metric, threshold in configured_thresholds.items():
+            column = metric_columns[metric]
+            value = record.get(column)
             try:
                 numeric = float(value)
             except (TypeError, ValueError):
@@ -130,7 +140,8 @@ async def _run(args: argparse.Namespace) -> int:
                     "question": record.get("user_input"),
                     "reasons": reasons,
                     "scores": {
-                        metric: record.get(metric) for metric in metric_thresholds
+                        metric: record.get(metric_columns[metric])
+                        for metric in configured_thresholds
                     },
                 }
             )
@@ -142,8 +153,8 @@ async def _run(args: argparse.Namespace) -> int:
 
     summary = {}
     failed_gate = False
-    for metric, threshold in metric_thresholds.items():
-        mean_value = float(frame[metric].mean())
+    for metric, threshold in configured_thresholds.items():
+        mean_value = float(frame[metric_columns[metric]].mean())
         summary[metric] = mean_value
         if mean_value < threshold:
             failed_gate = True
