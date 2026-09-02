@@ -102,11 +102,17 @@
 - 产品文档导入、知识资产、ERP/WMS 问答已迁移为 Vue SFC；
 - Dashboard 使用 ECharts 展示 Token 与响应时间趋势；
 - React、react-router-dom、lucide-react 和 TSX 残留扫描为 0。
+- 用户管理接入创建、更新、启停用和重置密码；后端没有用户删除接口，因此不描述成完整 CRUD。
+- 角色管理接入角色列表与权限全量替换；后端没有角色创建/删除接口。
+- 部门管理接入树形 CRUD，并增加 parent 自身/后代循环校验。
+- FAQ 管理接入创建、人工审核、发布缓存与下线；后端没有 FAQ PATCH 接口。
+- 知识缺口接入一键建档，新 unit 默认仅创建者可见，完成索引后才将 gap 标记 resolved。
+- CI 启动真实 MinIO 容器执行源文件上传、下载物化与删除网络 smoke；fake client 单测仍保留用于确定性覆盖。
 
 当前仍未完整做实：
 
-- 真实独立 MinIO 环境的网络 smoke test（当前 SourceStorage 单测使用 fake MinIO client，部署配置走 compose 静态校验）；
 - 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）；
-- 用户、角色、部门、FAQ、知识缺口几个管理页当前仍以占位交互为主，不能在面试中描述成完整后台 CRUD。
+- 知识资产 Vue 页当前能展示四维权限，但权限可视化编辑器尚未接入已有权限替换 API；
+- MinIO 的真实 CI smoke 只验证单节点网络读写，不等同于生产多副本、备份恢复和 bucket lifecycle 容灾验证。
 
 面试时不要把“规划中的增强项”说成这个分支已经存在的代码。
