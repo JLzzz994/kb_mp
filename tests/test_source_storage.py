@@ -51,7 +51,8 @@ class FakeMinio:
 
     def remove_objects(self, bucket: str, delete_objects):
         for delete in delete_objects:
-            self.objects.pop((bucket, delete.object_name), None)
+            name = getattr(delete, "object_name", None) or getattr(delete, "name", "")
+            self.objects.pop((bucket, name), None)
         return iter(())
 
 
