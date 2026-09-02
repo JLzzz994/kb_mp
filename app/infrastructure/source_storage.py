@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlparse
 
-from loguru import logger
 
 from app.config.settings import settings
 from app.infrastructure.file_storage import get_storage_dir, remove_file
