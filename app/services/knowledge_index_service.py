@@ -9,7 +9,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import KnowledgeIndexSyncError, KnowledgeUnitNotFoundError
-from app.infrastructure.file_storage import find_unit_source
+from app.infrastructure.source_storage import SourceStorage, build_source_storage
 from app.infrastructure.parser_factory import (
     ParserFactory,
     get_parser_factory,
@@ -40,6 +40,7 @@ class KnowledgeIndexService:
         milvus=None,
         splitter: StructuredSplitter | None = None,
         parser_factory: ParserFactory | None = None,
+        source_storage: SourceStorage | None = None,
     ) -> None:
         self._session = session
         self._repo = KnowledgeUnitRepository(session)
@@ -47,6 +48,7 @@ class KnowledgeIndexService:
         self._milvus = milvus
         self._splitter = splitter or StructuredSplitter()
         self._parser_factory = parser_factory or get_parser_factory()
+        self._source_storage = source_storage or build_source_storage()
 
     @property
     def vector_configured(self) -> bool:
@@ -86,26 +88,34 @@ class KnowledgeIndexService:
 
         document = parsed_document_from_text(record.content, parser_name="reindex_text")
         if prefer_source:
-            source_path = find_unit_source(record.unit_code, record.file_type)
-            if source_path is not None:
+            materialized = await self._source_storage.materialize(
+                unit_code=record.unit_code,
+                file_type=record.file_type,
+                content_hash=record.content_hash,
+            )
+            if materialized is not None:
                 try:
-                    source_document = self._parser_factory.parse_document(source_path)
+                    source_document = self._parser_factory.parse_document(materialized.path)
                     source_text = source_document.text.strip()
                     source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
                     if source_hash == record.content_hash:
                         document = source_document
                     else:
                         logger.warning(
-                            "knowledge.index.source_stale unit_id={} source={}",
+                            "knowledge.index.source_stale unit_id={} backend={} locator={}",
                             unit_id,
-                            source_path,
+                            materialized.backend,
+                            materialized.locator,
                         )
                 except Exception as exc:
                     logger.warning(
-                        "knowledge.index.source_reparse.failed unit_id={} error={}",
+                        "knowledge.index.source_reparse.failed unit_id={} backend={} error={}",
                         unit_id,
+                        materialized.backend,
                         exc,
                     )
+                finally:
+                    materialized.cleanup()
 
         chunks = self._splitter.split(document)
         if not chunks:

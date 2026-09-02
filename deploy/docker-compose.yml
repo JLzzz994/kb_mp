@@ -39,8 +39,8 @@ services:
     container_name: kb_mp_minio
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - milvus_minio_data:/minio_data
     networks:
@@ -158,6 +158,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       BCRYPT_COST: "12"
       AUTH_BITMAP_TTL_SECONDS: "300"
+      SOURCE_STORAGE_BACKEND: minio
+      SOURCE_STORAGE_PREFIX: sources
+      SOURCE_MINIO_ENDPOINT: minio:9000
+      SOURCE_MINIO_ACCESS_KEY: minioadmin
+      SOURCE_MINIO_SECRET_KEY: minioadmin
+      SOURCE_MINIO_BUCKET: kb-source-docs
+      SOURCE_MINIO_SECURE: "false"
     volumes:
       - kb_mp_storage:/app/storage
     networks:
@@ -170,6 +177,8 @@ services:
       redis:
         condition: service_healthy
       milvus:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]

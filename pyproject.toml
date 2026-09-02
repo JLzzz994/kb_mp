@@ -28,6 +28,7 @@ dependencies = [
     "apscheduler>=3.10.0",         # M6 定时任务
     "sqlalchemy[asyncio]>=2.0.30", # 包含 asyncmy 扩展（可选 aiomysql）
     "numpy>=1.26.0",               # M5/M6 P95 响应时间百分位计算
+    "minio>=7.2.0,<8.0.0",         # 产品知识源文件对象存储
 ]
 
 [project.optional-dependencies]

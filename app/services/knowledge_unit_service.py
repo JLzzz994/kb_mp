@@ -31,7 +31,7 @@ from app.infrastructure.database import (
     RoleRecord,
     UserRecord,
 )
-from app.infrastructure.file_storage import remove_unit_source
+from app.infrastructure.source_storage import SourceStorage, build_source_storage
 from app.repositories.knowledge_unit_repository import (
     KnowledgeUnitRepository,
     UnitPermissionRepository,
@@ -145,11 +145,13 @@ class KnowledgeUnitService:
         self,
         session: AsyncSession,
         index_service: KnowledgeIndexService | None = None,
+        source_storage: SourceStorage | None = None,
     ) -> None:
         self._session = session
         self._unit_repo = KnowledgeUnitRepository(session)
         self._perm_repo = UnitPermissionRepository(session)
         self._index_service = index_service or build_knowledge_index_service(session)
+        self._source_storage = source_storage or build_source_storage()
 
     async def list(
         self,
@@ -279,7 +281,16 @@ class KnowledgeUnitService:
         await self._session.commit()
 
         for record in records:
-            remove_unit_source(record.unit_code, record.file_type)
+            try:
+                await self._source_storage.delete_unit_sources(record.unit_code)
+            except Exception as exc:
+                # DB 已删除后，对象残留只会形成不可检索 orphan；不回滚业务删除。
+                logger.warning(
+                    "knowledge.source.delete_orphan unit_code={} backend={} error={}",
+                    record.unit_code,
+                    self._source_storage.backend_name,
+                    exc,
+                )
 
         logger.warning("knowledge.unit.batch_delete count={}", deleted)
         return deleted
@@ -397,5 +408,10 @@ class KnowledgeUnitService:
 def build_knowledge_unit_service(
     session: AsyncSession,
     index_service: KnowledgeIndexService | None = None,
+    source_storage: SourceStorage | None = None,
 ) -> KnowledgeUnitService:
-    return KnowledgeUnitService(session, index_service=index_service)
+    return KnowledgeUnitService(
+        session,
+        index_service=index_service,
+        source_storage=source_storage,
+    )

@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     max_total_upload_size_mb: int = 200
 
+    # 产品知识源文件：local 单机开发 / minio 多实例部署
+    source_storage_backend: str = "local"
+    source_storage_prefix: str = "sources"
+    source_minio_endpoint: str = "localhost:9000"
+    source_minio_access_key: str = "minioadmin"
+    source_minio_secret_key: str = "minioadmin"
+    source_minio_bucket: str = "kb-source-docs"
+    source_minio_secure: bool = False
+
     # ── 文档解析 / MinerU ─────────────────────────────
     # auto: PDF/DOCX 优先 MinerU，可执行文件不存在或解析失败时回退原生解析器
     # native: 始终使用 pypdf/python-docx/markdown/txt

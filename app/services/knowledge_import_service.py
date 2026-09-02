@@ -14,13 +14,14 @@ from app.api.schemas.knowledge_import_schema import ImportRejectedItem, ImportTa
 from app.common.errors import FileSizeExceededError
 from app.config.settings import settings
 from app.domain.document import DocumentBlock, ParsedDocument, StructuredChunk
-from app.infrastructure.file_storage import persist_unit_source, remove_file, save_upload
+from app.infrastructure.file_storage import remove_file, save_upload
 from app.infrastructure.parser_factory import (
     ParserFactory,
     UnsupportedFormatError,
     get_parser_factory,
 )
 from app.infrastructure.parsers.base_parser import ParseError
+from app.infrastructure.source_storage import SourceStorage, build_source_storage
 from app.infrastructure.structured_splitter import StructuredSplitter
 from app.repositories.knowledge_unit_repository import KnowledgeUnitRepository
 
@@ -67,9 +68,15 @@ def _legacy_parsed_document(raw_text: str) -> ParsedDocument:
 
 
 class KnowledgeImportService:
-    def __init__(self, session: AsyncSession, parser_factory: ParserFactory | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        parser_factory: ParserFactory | None = None,
+        source_storage: SourceStorage | None = None,
+    ) -> None:
         self._session = session
         self._parser_factory = parser_factory or get_parser_factory()
+        self._source_storage = source_storage or build_source_storage()
         self._unit_repo = KnowledgeUnitRepository(session)
         self._splitter = StructuredSplitter()
 
@@ -181,17 +188,24 @@ class KnowledgeImportService:
                 continue
 
             try:
-                archived_path = persist_unit_source(saved_path, record.unit_code)
+                archived = await self._source_storage.archive_temp_file(
+                    saved_path,
+                    unit_code=record.unit_code,
+                    file_type=file_ext,
+                    content_hash=content_hash,
+                )
                 logger.info(
-                    "knowledge.import.source_archived unit_id={} path={}",
+                    "knowledge.import.source_archived unit_id={} backend={} locator={}",
                     record.id,
-                    archived_path,
+                    archived.backend,
+                    archived.locator,
                 )
             except Exception as exc:
                 remove_file(saved_path)
                 logger.warning(
-                    "knowledge.import.source_archive.failed unit_id={} error={}",
+                    "knowledge.import.source_archive.failed unit_id={} backend={} error={}",
                     record.id,
+                    self._source_storage.backend_name,
                     exc,
                 )
 
@@ -259,8 +273,13 @@ class KnowledgeImportService:
 def build_knowledge_import_service(
     session: AsyncSession,
     parser_factory: ParserFactory | None = None,
+    source_storage: SourceStorage | None = None,
 ) -> KnowledgeImportService:
-    return KnowledgeImportService(session, parser_factory)
+    return KnowledgeImportService(
+        session,
+        parser_factory=parser_factory,
+        source_storage=source_storage,
+    )
 
 
 async def _vectorize_and_upsert(
