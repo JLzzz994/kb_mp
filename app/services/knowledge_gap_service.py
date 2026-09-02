@@ -15,7 +15,14 @@ from app.api.schemas.knowledge_gap_schema import (
 )
 from app.common.errors import KnowledgeGapNotFoundError
 from app.repositories.knowledge_gap_repository import KnowledgeGapRepository
-from app.repositories.knowledge_unit_repository import KnowledgeUnitRepository
+from app.repositories.knowledge_unit_repository import (
+    KnowledgeUnitRepository,
+    UnitPermissionRepository,
+)
+from app.services.knowledge_index_service import (
+    KnowledgeIndexService,
+    build_knowledge_index_service,
+)
 from app.services.knowledge_unit_service import (
     _compute_content_hash,
     _gen_unit_code,
@@ -23,10 +30,16 @@ from app.services.knowledge_unit_service import (
 
 
 class KnowledgeGapService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        index_service: KnowledgeIndexService | None = None,
+    ) -> None:
         self._session = session
         self._repo = KnowledgeGapRepository(session)
         self._unit_repo = KnowledgeUnitRepository(session)
+        self._perm_repo = UnitPermissionRepository(session)
+        self._index_service = index_service or build_knowledge_index_service(session)
 
     async def record(
         self,
@@ -103,8 +116,9 @@ class KnowledgeGapService:
         content_hash = _compute_content_hash(content)
         existing_unit = await self._unit_repo.find_by_content_hash(content_hash)
         if existing_unit is not None:
-            # 直接关联到已有 unit
             unit_id = existing_unit.id
+            if existing_unit.status != "active":
+                await self._index_service.rebuild_unit(unit_id, prefer_source=False)
         else:
             record = KnowledgeUnitRecord(
                 unit_code=_gen_unit_code(),
@@ -113,11 +127,20 @@ class KnowledgeGapService:
                 summary=data.summary or (samples[0] if samples else None),
                 category=data.category,
                 content_hash=content_hash,
-                status="active",
+                status="vector_pending",
                 creator_id=user_id,
             )
             await self._unit_repo.create(record)
             unit_id = record.id
+
+            # 缺口建档默认遵循最小权限：先仅创建者本人可见。
+            # 知识管理员可在知识资产页审核后再扩大到部门/角色/global。
+            await self._perm_repo.replace_all(unit_id, [("user", user_id)])
+            await self._session.commit()
+
+            # 不存在源文件，明确按 DB 正文建立 chunk 索引。
+            # 索引失败时保持 vector_pending，gap 也不提前标 resolved。
+            await self._index_service.rebuild_unit(unit_id, prefer_source=False)
 
         await self._repo.set_resolved(gap_id, unit_id)
         await self._session.commit()
@@ -148,5 +171,8 @@ class KnowledgeGapService:
         )
 
 
-def build_knowledge_gap_service(session: AsyncSession) -> KnowledgeGapService:
-    return KnowledgeGapService(session)
+def build_knowledge_gap_service(
+    session: AsyncSession,
+    index_service: KnowledgeIndexService | None = None,
+) -> KnowledgeGapService:
+    return KnowledgeGapService(session, index_service=index_service)
