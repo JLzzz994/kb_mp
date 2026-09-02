@@ -1,5 +1,4 @@
-import { http, type PageData, type ListQuery } from "./client";
-import type { PermissionEntry } from "./knowledge";
+import { http, type PageData } from "./client";
 
 export interface FaqItem {
   id: number;
@@ -20,20 +19,34 @@ export interface FaqItem {
 export interface GapItem {
   id: number;
   question_pattern: string;
-  sample_questions: string[];
+  sample_questions_json: string[];
   ask_count: number;
   last_asked_at: string;
   status: "unresolved" | "resolved" | "ignored";
   resolved_unit_id: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
-export async function getFaqs(params: ListQuery): Promise<PageData<FaqItem>> {
+export interface FaqListQuery {
+  page?: number;
+  page_size?: number;
+  status?: FaqItem["status"];
+  source_type?: FaqItem["source_type"];
+}
+
+export async function getFaqs(params: FaqListQuery): Promise<PageData<FaqItem>> {
   const { data } = await http.get<PageData<FaqItem>>("/faqs", { params });
   return data;
 }
 
-export async function getFaqRecommendations(): Promise<FaqItem[]> {
-  const { data } = await http.get<FaqItem[]>("/faqs/recommendations");
+export async function getFaqRecommendations(
+  page = 1,
+  page_size = 20,
+): Promise<PageData<FaqItem>> {
+  const { data } = await http.get<PageData<FaqItem>>("/faqs/recommendations", {
+    params: { page, page_size },
+  });
   return data;
 }
 
@@ -49,17 +62,12 @@ export async function createFaq(input: FaqCreateInput): Promise<FaqItem> {
   return data;
 }
 
-export async function patchFaq(id: number, input: Partial<FaqCreateInput>): Promise<FaqItem> {
-  const { data } = await http.patch<FaqItem>(`/faqs/${id}`, input);
-  return data;
-}
-
 export async function reviewFaq(
   id: number,
   action: "approve" | "reject",
   editedAnswer?: string,
 ): Promise<FaqItem> {
-  const { data } = await http.post<FaqItem>(`/faqs/${id}/review`, {
+  const { data } = await http.post<FaqItem>("/faqs/" + id + "/review", {
     action,
     edited_answer: action === "approve" ? (editedAnswer ?? null) : null,
   });
@@ -67,21 +75,34 @@ export async function reviewFaq(
 }
 
 export async function offlineFaq(id: number): Promise<void> {
-  await http.delete(`/faqs/${id}`);
+  await http.delete("/faqs/" + id);
 }
 
-export async function getGaps(params: ListQuery): Promise<PageData<GapItem>> {
+export interface GapListQuery {
+  page?: number;
+  page_size?: number;
+  status?: GapItem["status"];
+}
+
+export async function getGaps(params: GapListQuery): Promise<PageData<GapItem>> {
   const { data } = await http.get<PageData<GapItem>>("/knowledge-gaps", { params });
   return data;
 }
 
 export interface CreateUnitFromGapInput {
   title: string;
-  content: string;
   category?: string | null;
-  permissions: Array<{ target_type: PermissionEntry["target_type"]; target_id: number | null }>;
+  summary?: string | null;
+  content?: string | null;
 }
 
-export async function createUnitFromGap(id: number, input: CreateUnitFromGapInput): Promise<void> {
-  await http.post(`/knowledge-gaps/${id}/create-unit`, input);
+export async function createUnitFromGap(
+  id: number,
+  input: CreateUnitFromGapInput,
+): Promise<{ gap_id: number; unit_id: number }> {
+  const { data } = await http.post<{ gap_id: number; unit_id: number }>(
+    "/knowledge-gaps/" + id + "/create-unit",
+    input,
+  );
+  return data;
 }
