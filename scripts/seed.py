@@ -50,6 +50,10 @@ ROLES = [
 ]
 
 KNOWLEDGE_ADMIN_CODES = [
+    # 只读组织权限用于四维知识权限目标选择，不授予组织写权限。
+    PermissionCode.USER_READ,
+    PermissionCode.ROLE_READ,
+    PermissionCode.DEPT_READ,
     PermissionCode.KNOWLEDGE_READ,
     PermissionCode.KNOWLEDGE_WRITE,
     PermissionCode.KNOWLEDGE_DELETE,
