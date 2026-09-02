@@ -97,6 +97,9 @@ seed 数据调整为：
 - 知识资产页可直接查看 index-status，并由有权限用户触发单 unit reindex。
 - SSE 问答继续保留 citation / unauthorized / interrupt / final 事件处理。
 - 知识运营看板已从 Recharts 改为 **ECharts**，展示 Token 与响应时间趋势。
+- 用户页已接入创建、更新、启停用、重置密码；角色页按真实后端能力提供权限全量替换。
+- 业务团队页已接入部门树 CRUD，并在前后端同时阻止循环 parent 关系。
+- FAQ 页已接入创建、审核通过/拒绝、下线；知识缺口页已接入“一键建档 -> 最小权限 -> 索引 -> resolved”。
 - 原 React、React Router、Radix/shadcn TSX 源码与依赖已从该分支移除。
 
 ## 与简历项目口径的对应关系
@@ -117,12 +120,14 @@ seed 数据调整为：
 | 知识更新 / 索引一致性 | 已落地 unit 级增量重建、旧向量清理、index-status、批量 audit/repair |
 | MinIO 源文件版本管理 | 已落地 local/minio 双后端，按 unit_code + content_hash 版本化对象 key |
 | Vue 3 / Pinia / ECharts | 已完成前端真实迁移，React/TSX 残留扫描为 0 |
+| 组织/RBAC 管理 | 用户创建/更新/启停/重置密码、部门 CRUD、角色权限分配已接真实 API |
+| FAQ / 知识缺口运营 | FAQ 创建/审核/下线、缺口建档与索引闭环已接真实 API |
 
 ## 本地开发
 
 ```bash
 # 后端
-uv sync --all-extras
+uv sync --locked --all-extras
 uv run uvicorn app.api.app:app --reload --port 8000
 
 # 初始化 ERP/WMS 业务演示组织
@@ -149,9 +154,14 @@ docker compose up -d
 ## 测试
 
 ```bash
+uv lock --check
+uv sync --locked --all-extras
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest -v --ignore=tests/test_e2e_t7_real_vectorize.py
+
+# CI 还会启动真实 MinIO 容器执行
+RUN_MINIO_INTEGRATION=1 uv run pytest tests/test_source_storage_minio_integration.py -v
 ```
 
 ## 当前文档入库链路
@@ -235,7 +245,8 @@ RAG 鉴权前还会查询 MySQL，只允许 `status=active` 的知识单元进�
 - reindex 只拉取和当前 `content_hash` 匹配的对象版本；
 - 人工 PATCH 正文后 hash 变化但没有对应新源文件时，自动回退数据库正文；
 - 兼容旧 `storage/uploads/{unit_code}.{ext}` 本地文件；
-- Local/MinIO 单元测试使用 fake client，不把 fake 测试描述成真实 MinIO 网络集成测试。
+- Local/MinIO 单元测试保留 fake client 做确定性验证；
+- GitHub Actions 另起真实 MinIO 容器，执行 archive -> stat/download -> materialize -> delete 的网络 smoke test。
 
 
 运维接口和命令：
@@ -289,6 +300,6 @@ uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
 
 下一阶段建议：
 
-1. 在独立部署环境增加真实 MinIO 网络 smoke test，并配置 bucket lifecycle 清理极端情况下的 orphan source。
+1. 把知识资产页的四维权限（global / department / role / user）从“只展示”升级为 Vue 可视化编辑器，并接现有权限替换 API。
 2. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
-3. 将当前仍为占位交互的用户、角色、部门、FAQ 与知识缺口页继续产品化，但不影响核心 RAG 主链路。
+3. 为 MinIO source bucket 增加 lifecycle/orphan 巡检策略；真实网络 smoke 已进入 CI，但不等同于生产容灾验证。
