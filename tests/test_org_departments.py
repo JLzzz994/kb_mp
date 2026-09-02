@@ -125,3 +125,31 @@ async def test_delete_dept_with_members(async_client: AsyncClient, admin_token, 
     resp = await async_client.delete(f"/api/v1/org/departments/{root_dept_id}", headers=headers)
     assert resp.status_code == 422
     assert resp.json()["error_code"] == "department_not_empty"
+
+
+@pytest.mark.asyncio
+async def test_update_department_rejects_descendant_parent(
+    async_client: AsyncClient, admin_token, root_dept_id
+):
+    """update_cycle：不能把父部门移动到自己的后代下面。"""
+    headers = _auth(admin_token)
+    child_resp = await async_client.post(
+        "/api/v1/org/departments",
+        headers=headers,
+        json={"name": "循环测试子部门", "parent_id": root_dept_id, "sort_order": 1},
+    )
+    assert child_resp.status_code == 201
+    child_id = child_resp.json()["id"]
+
+    resp = await async_client.put(
+        f"/api/v1/org/departments/{root_dept_id}",
+        headers=headers,
+        json={
+            "name": "研发中心",
+            "parent_id": child_id,
+            "leader_id": None,
+            "sort_order": 0,
+        },
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error_code"] == "department_cycle"
