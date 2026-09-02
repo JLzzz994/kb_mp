@@ -87,7 +87,10 @@
 - PATCH title/category 仅同步 Milvus 元数据，不重复 Embedding；
 - vector_pending / 已删除 unit 在权限过滤前被剔除；
 - index-status、单 unit reindex、批量 consistency audit/repair；
-- 新导入源文件按 unit_code 归档，hash 一致时可用原文件重建页码/章节。
+- SourceStorage 支持 local / MinIO 双后端；
+- 源文件按 `sources/{unit_code}/{content_hash}.{ext}` 版本化归档；
+- reindex 时只物化与 DB `content_hash` 对应的源文件版本，hash 一致才恢复原页码/章节；
+- MinIO 网络 I/O 从 async 主线程卸载到线程池，下载临时文件解析后立即清理；
 
 这里的“增量重建”明确是 **知识单元级增量**，不是 chunk-diff 算法，不在面试中扩大描述。
 
@@ -102,7 +105,7 @@
 
 当前仍未完整做实：
 
-- 多实例部署下的 MinIO/object storage 源文件版本管理；
+- 真实独立 MinIO 环境的网络 smoke test（当前 SourceStorage 单测使用 fake MinIO client，部署配置走 compose 静态校验）；
 - 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）；
 - 用户、角色、部门、FAQ、知识缺口几个管理页当前仍以占位交互为主，不能在面试中描述成完整后台 CRUD。
 
