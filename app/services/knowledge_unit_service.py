@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.knowledge_schema import (
@@ -338,18 +339,30 @@ class KnowledgeUnitService:
         unit = await self._unit_repo.find_by_id(unit_id)
         if unit is None:
             raise KnowledgeUnitNotFoundError(f"id={unit_id}")
-        global_count = sum(1 for p in req.permissions if p.target_type == "global")
-        if global_count > 1:
-            raise InvalidPermissionConfigurationError("multiple global rows not allowed")
         if not req.permissions:
             raise InvalidPermissionConfigurationError("at least one permission required")
-        for p in req.permissions:
-            if p.target_type != "global" and p.target_id is None:
-                raise InvalidPermissionConfigurationError(f"{p.target_type} requires target_id")
 
         entries: list[tuple[str, int | None]] = [
             (p.target_type, p.target_id) for p in req.permissions
         ]
+        if len(set(entries)) != len(entries):
+            raise InvalidPermissionConfigurationError("duplicate permission rows are not allowed")
+
+        global_entries = [p for p in req.permissions if p.target_type == "global"]
+        if global_entries:
+            if len(req.permissions) != 1 or len(global_entries) != 1:
+                raise InvalidPermissionConfigurationError(
+                    "global permission must be configured alone"
+                )
+            if global_entries[0].target_id is not None:
+                raise InvalidPermissionConfigurationError("global target_id must be null")
+        else:
+            for p in req.permissions:
+                if p.target_id is None:
+                    raise InvalidPermissionConfigurationError(
+                        f"{p.target_type} requires target_id"
+                    )
+            await self._validate_permission_targets(req.permissions)
         await self._perm_repo.replace_all(unit_id, entries)
         await self._session.commit()
 
@@ -380,6 +393,29 @@ class KnowledgeUnitService:
             )
             for e in resolved
         ]
+
+    async def _validate_permission_targets(self, permissions) -> None:
+        """Ensure department/role/user target IDs exist before replacing permissions."""
+        target_models = {
+            "department": DepartmentRecord,
+            "role": RoleRecord,
+            "user": UserRecord,
+        }
+        for target_type, model in target_models.items():
+            ids = {
+                int(p.target_id)
+                for p in permissions
+                if p.target_type == target_type and p.target_id is not None
+            }
+            if not ids:
+                continue
+            rows = await self._session.execute(select(model.id).where(model.id.in_(ids)))
+            found = {int(value) for value in rows.scalars().all()}
+            missing = sorted(ids - found)
+            if missing:
+                raise InvalidPermissionConfigurationError(
+                    f"{target_type} target ids not found: {missing}"
+                )
 
     async def _build_summary(
         self, unit_id: int, unit: KnowledgeUnitRecord
