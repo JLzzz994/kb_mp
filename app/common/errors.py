@@ -88,6 +88,13 @@ class DepartmentNotEmptyError(AppError):
     error_code = "department_not_empty"
 
 
+class DepartmentCycleError(AppError):
+    """部门 parent_id 指向自身或后代，避免组织树形成环。"""
+
+    status_code = 422
+    error_code = "department_cycle"
+
+
 class UsernameConflictError(AppError):
     """用户名唯一约束冲突。"""
 
