@@ -122,6 +122,7 @@ async def test_one_click_create_unit_creates_and_resolves_gap(
 
     from app.infrastructure.database import KnowledgeGapRecord as KGR
     from app.infrastructure.database import KnowledgeUnitRecord as KUR
+    from app.infrastructure.database import UnitPermissionRecord as UPR
 
     factory = async_sessionmaker(bind=async_engine, expire_on_commit=False)
 
@@ -145,6 +146,13 @@ async def test_one_click_create_unit_creates_and_resolves_gap(
         unit = (await session.execute(_sel(KUR).where(KUR.id == body["unit_id"]))).scalar_one()
         assert unit.title == "kb_mp 部署指南"
         assert unit.category == "deployment"
+        assert unit.status == "active"
+
+        permission = (
+            await session.execute(_sel(UPR).where(UPR.unit_id == body["unit_id"]))
+        ).scalar_one()
+        assert permission.target_type == "user"
+        assert permission.target_id == seeded_admin["user_id"]
 
         gap = (await session.execute(_sel(KGR).where(KGR.id == unresolved_gap.id))).scalar_one()
         assert gap.status == "resolved"
