@@ -9,12 +9,12 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import KnowledgeIndexSyncError, KnowledgeUnitNotFoundError
-from app.infrastructure.source_storage import SourceStorage, build_source_storage
 from app.infrastructure.parser_factory import (
     ParserFactory,
     get_parser_factory,
     parsed_document_from_text,
 )
+from app.infrastructure.source_storage import SourceStorage, build_source_storage
 from app.infrastructure.structured_splitter import StructuredSplitter
 from app.repositories.knowledge_unit_repository import KnowledgeUnitRepository
 
