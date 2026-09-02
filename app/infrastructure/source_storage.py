@@ -155,9 +155,7 @@ class MinioSourceStorage:
         client=None,
     ) -> None:
         endpoint_value = endpoint or settings.source_minio_endpoint
-        parsed = urlparse(
-            endpoint_value if "://" in endpoint_value else f"http://{endpoint_value}"
-        )
+        parsed = urlparse(endpoint_value if "://" in endpoint_value else f"http://{endpoint_value}")
         self._endpoint = parsed.netloc or parsed.path
         inferred_secure = parsed.scheme == "https"
         self._secure = settings.source_minio_secure if secure is None else secure
