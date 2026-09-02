@@ -24,14 +24,6 @@ export interface PermissionEntry {
 
 export interface KnowledgeUnitDetail extends KnowledgeUnitItem {
   content: string;
-  tags: string[];
-  attachments: Array<{
-    id: number;
-    file_name: string;
-    file_size: number;
-    content_type: string;
-    download_url: string;
-  }>;
   permissions: PermissionEntry[];
 }
 
@@ -99,8 +91,12 @@ export async function configureUnitPermissions(
     target_type: PermissionEntry["target_type"];
     target_id: number | null;
   }>,
-): Promise<void> {
-  await http.post(`/knowledge-units/${id}/permissions`, { permissions });
+): Promise<PermissionEntry[]> {
+  const { data } = await http.post<PermissionEntry[]>(
+    `/knowledge-units/${id}/permissions`,
+    { permissions },
+  );
+  return data;
 }
 
 export async function checkPermissions(
