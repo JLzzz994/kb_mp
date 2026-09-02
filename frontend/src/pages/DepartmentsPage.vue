@@ -41,9 +41,24 @@ function flatten(nodes: DepartmentNode[], depth = 0): FlatNode[] {
 }
 
 const flat = computed(() => flatten(tree.value));
-const parentOptions = computed(() =>
-  flat.value.filter((item) => item.node.id !== editing.value?.id),
-);
+function collectDescendantIds(node: DepartmentNode | null): Set<number> {
+  const ids = new Set<number>();
+  function visit(current: DepartmentNode) {
+    for (const child of current.children) {
+      ids.add(child.id);
+      visit(child);
+    }
+  }
+  if (node) visit(node);
+  return ids;
+}
+
+const parentOptions = computed(() => {
+  const descendants = collectDescendantIds(editing.value);
+  return flat.value.filter(
+    (item) => item.node.id !== editing.value?.id && !descendants.has(item.node.id),
+  );
+});
 
 async function load() {
   loading.value = true;
