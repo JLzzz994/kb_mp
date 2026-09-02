@@ -86,3 +86,44 @@ jobs:
         run: cp .env.example .env
       - name: Validate deployment compose
         run: docker compose -f deploy/docker-compose.yml config >/dev/null
+
+  source-storage-integration:
+    name: real MinIO source-storage smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUN_MINIO_INTEGRATION: "1"
+      SOURCE_MINIO_ENDPOINT: localhost:9000
+      SOURCE_MINIO_ACCESS_KEY: minioadmin
+      SOURCE_MINIO_SECRET_KEY: minioadmin
+      SOURCE_MINIO_BUCKET: kb-source-docs-ci
+      SOURCE_MINIO_SECURE: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Start MinIO
+        run: |
+          docker run -d --name kb-source-minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:RELEASE.2025-02-28T09-55-16Z \
+            server /data --address ":9000"
+          for i in {1..30}; do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs kb-source-minio
+          exit 1
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install --user uv
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run real MinIO integration
+        run: uv run pytest tests/test_source_storage_minio_integration.py -v
