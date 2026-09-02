@@ -10,7 +10,11 @@ from app.api.schemas.department_schema import (
     DepartmentNode,
     DepartmentUpdate,
 )
-from app.common.errors import DepartmentNotEmptyError, DepartmentNotFoundError
+from app.common.errors import (
+    DepartmentCycleError,
+    DepartmentNotEmptyError,
+    DepartmentNotFoundError,
+)
 from app.repositories.department_repository import DepartmentRepository
 
 
@@ -76,9 +80,7 @@ class DepartmentService:
         if await self._repo.find_by_id(dept_id) is None:
             raise DepartmentNotFoundError(f"id={dept_id}")
         if data.parent_id is not None:
-            parent = await self._repo.find_by_id(data.parent_id)
-            if parent is None:
-                raise DepartmentNotFoundError(f"parent_id={data.parent_id}")
+            await self._validate_parent_change(dept_id, data.parent_id)
         row = await self._repo.update(
             dept_id,
             name=data.name,
@@ -99,6 +101,24 @@ class DepartmentService:
             member_count=0,
             children=[],
         )
+
+    async def _validate_parent_change(self, dept_id: int, parent_id: int) -> None:
+        """Reject self-parenting and moving a department under its descendants."""
+        current_id: int | None = parent_id
+        visited: set[int] = set()
+        while current_id is not None:
+            if current_id == dept_id:
+                raise DepartmentCycleError(
+                    f"dept_id={dept_id} cannot use descendant/self parent_id={parent_id}"
+                )
+            if current_id in visited:
+                raise DepartmentCycleError(f"existing department cycle at id={current_id}")
+            visited.add(current_id)
+
+            parent = await self._repo.find_by_id(current_id)
+            if parent is None:
+                raise DepartmentNotFoundError(f"parent_id={current_id}")
+            current_id = parent.parent_id
 
     async def delete(self, dept_id: int) -> None:
         """删除部门。子部门或成员存在 → 422。目标不存在 → 404。"""
