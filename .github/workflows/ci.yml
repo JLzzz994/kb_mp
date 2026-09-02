@@ -74,3 +74,15 @@ jobs:
       - name: Typecheck and build
         working-directory: frontend
         run: npm run build
+
+  deployment:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare compose env
+        run: cp .env.example .env
+      - name: Validate deployment compose
+        run: docker compose -f deploy/docker-compose.yml config >/dev/null
