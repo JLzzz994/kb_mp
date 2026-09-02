@@ -103,31 +103,30 @@ async def test_patch_unit_updates_content_and_rehash(
     assert detail.json()["content"] == "Updated content here."
 
 
-# ── 4. 配置权限：global 行 + department 行 → OR 合并 ─────────────────────────────
+# ── 4. 配置权限：department + user → OR 合并 ─────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_configure_permissions_replace_all(
     async_client: AsyncClient, seeded_admin, admin_token, sample_unit, db_session
 ):
-    """原 global 行应被替换；新权限含 global + department。"""
-    # 1. 配置为 global + dept(1)
+    """原 global 行被 scoped permissions 全量替换。"""
     resp = await async_client.post(
         f"/api/v1/knowledge-units/{sample_unit.id}/permissions",
         headers=_auth(admin_token),
         json={
             "permissions": [
-                {"target_type": "global", "target_id": None},
                 {"target_type": "department", "target_id": 1},
+                {"target_type": "user", "target_id": seeded_admin["user_id"]},
             ]
         },
     )
     assert resp.status_code == 200, resp.text
     entries = resp.json()
     types = sorted(e["target_type"] for e in entries)
-    assert types == ["department", "global"]
+    assert types == ["department", "user"]
+    assert all(not e["target_label"].startswith("#") for e in entries)
 
-    # 2. 旧 global 行已被替换（不应有两条 global）
     perm_rows = (
         (
             await db_session.execute(
@@ -137,11 +136,44 @@ async def test_configure_permissions_replace_all(
         .scalars()
         .all()
     )
-    global_count = sum(1 for r in perm_rows if r.target_type == "global")
-    assert global_count == 1
+    assert {(row.target_type, row.target_id) for row in perm_rows} == {
+        ("department", 1),
+        ("user", seeded_admin["user_id"]),
+    }
 
 
-# ── 5. 权限配置错误：多条 global → 422 ─────────────────────────────
+# ── 5. 权限配置错误 ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_configure_permissions_rejects_global_with_scoped(
+    async_client: AsyncClient, seeded_admin, admin_token, sample_unit
+):
+    resp = await async_client.post(
+        f"/api/v1/knowledge-units/{sample_unit.id}/permissions",
+        headers=_auth(admin_token),
+        json={
+            "permissions": [
+                {"target_type": "global", "target_id": None},
+                {"target_type": "user", "target_id": seeded_admin["user_id"]},
+            ]
+        },
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error_code"] == "invalid_permission_configuration"
+
+
+@pytest.mark.asyncio
+async def test_configure_permissions_rejects_missing_target(
+    async_client: AsyncClient, seeded_admin, admin_token, sample_unit
+):
+    resp = await async_client.post(
+        f"/api/v1/knowledge-units/{sample_unit.id}/permissions",
+        headers=_auth(admin_token),
+        json={"permissions": [{"target_type": "user", "target_id": 999999}]},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error_code"] == "invalid_permission_configuration"
 
 
 @pytest.mark.asyncio
