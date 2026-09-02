@@ -115,6 +115,7 @@ seed 数据调整为：
 | MinerU | 已接入 CLI/远程 API 模式，auto 失败时回退 pypdf/python-docx |
 | 固定评测 / bad case / RAGAS | 已落地固定 ERP/WMS 评测集、Hit@K/Recall@K/MRR、bad-case 分类与可选 RAGAS runner |
 | 知识更新 / 索引一致性 | 已落地 unit 级增量重建、旧向量清理、index-status、批量 audit/repair |
+| MinIO 源文件版本管理 | 已落地 local/minio 双后端，按 unit_code + content_hash 版本化对象 key |
 | Vue 3 / Pinia / ECharts | 已完成前端真实迁移，React/TSX 残留扫描为 0 |
 
 ## 本地开发
@@ -174,7 +175,17 @@ MinerU 采用外部 CLI/服务方式接入，不强塞进默认 `uv sync --all-e
 
 ## 知识更新与索引一致性
 
-新导入源文件会从临时 UUID 文件归档成 `storage/uploads/{unit_code}.{ext}`，因此后续能够重新定位原 PDF/DOCX。
+新导入源文件使用可切换的 SourceStorage：
+
+```text
+SOURCE_STORAGE_BACKEND=local
+  -> storage/uploads/sources/{unit_code}/{content_hash}.{ext}
+
+SOURCE_STORAGE_BACKEND=minio
+  -> kb-source-docs/sources/{unit_code}/{content_hash}.{ext}
+```
+
+Docker Compose 默认让应用使用已有 MinIO 服务的独立 `kb-source-docs` bucket；MinIO bucket 在首次归档时幂等创建。对象 key 使用解析后正文的 SHA-256 `content_hash` 作为版本号，因此旧源文件不会覆盖新版本。
 
 更新策略：
 
@@ -197,18 +208,35 @@ PATCH content
   -> status=active
 
 POST /api/v1/knowledge-units/{id}/reindex
-  -> 如果归档源文件存在且重新解析文本 hash == DB content_hash
-       优先按原文件重建，保留页码/章节
+  -> SourceStorage 按 unit_code + DB content_hash 查找版本化源文件
+  -> MinIO 后端先临时物化到本地，再交给 MinerU/parser
+  -> 如果重新解析文本 hash == DB content_hash
+       按原文件重建，保留页码/章节
      否则
        从 DB 正文重建，避免旧源文件覆盖人工编辑
+  -> MinIO 临时物化文件用完即清理
 ```
 
 RAG 鉴权前还会查询 MySQL，只允许 `status=active` 的知识单元进入 Prompt。
 因此 `vector_pending` 的旧向量、已删除 unit 的 orphan vector 都不会作为有效证据返回。
 
-删除顺序是：**Milvus chunks -> MySQL unit -> 本地归档源文件**。如果向量清理失败，删除操作返回索引同步错误，不先删数据库记录。
+删除主顺序是：**Milvus chunks -> MySQL unit -> SourceStorage 源文件**。如果向量清理失败，数据库记录不会先删；数据库删除成功后若对象存储清理失败，只留下不可检索 orphan source，并记录告警，不把业务删除回滚成半删除状态。
 
 当前是 **unit 级增量重建**：只重建发生变化的知识单元，不全量刷新 collection；并未把它描述成 chunk-diff 级增量更新。
+
+
+### MinIO 源文件版本策略
+
+`app/infrastructure/source_storage.py` 统一封装本地和 MinIO：
+
+- 上传解析前仍先写临时本地文件，MinerU / native parser 无需感知对象存储；
+- DB 成功后再把源文件归档到 SourceStorage；
+- MinIO SDK 的网络 I/O 通过 `asyncio.to_thread`，避免阻塞 FastAPI Event Loop；
+- reindex 只拉取和当前 `content_hash` 匹配的对象版本；
+- 人工 PATCH 正文后 hash 变化但没有对应新源文件时，自动回退数据库正文；
+- 兼容旧 `storage/uploads/{unit_code}.{ext}` 本地文件；
+- Local/MinIO 单元测试使用 fake client，不把 fake 测试描述成真实 MinIO 网络集成测试。
+
 
 运维接口和命令：
 
@@ -261,6 +289,6 @@ uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
 
 下一阶段建议：
 
-1. 多实例部署时把本地源文件归档替换为 MinIO/object storage，并增加对象版本号。
+1. 在独立部署环境增加真实 MinIO 网络 smoke test，并配置 bucket lifecycle 清理极端情况下的 orphan source。
 2. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
 3. 将当前仍为占位交互的用户、角色、部门、FAQ 与知识缺口页继续产品化，但不影响核心 RAG 主链路。
