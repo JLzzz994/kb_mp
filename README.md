@@ -312,7 +312,7 @@ scripts/compare_retrieval_baseline.py
   -> 同一份 RRF 候选
   -> RRF-only vs BGE-Reranker
   -> Hit@K / Recall@K / MRR + latency
-  -> dataset SHA / git SHA / 模型与 collection 指纹
+  -> dataset SHA / git SHA / 模型 metadata/snapshot/weight-manifest 与运行环境指纹
   -> 显式 --write-baseline 才写基线
   -> --baseline + tolerance 做回归门禁
 
@@ -322,11 +322,15 @@ scripts/capture_rag_eval_traces.py
   -> permission filter
   -> prompt
   -> real OpenAI-compatible LLM
-  -> rag_traces.jsonl
-  -> RAGAS
+  -> rag_traces.jsonl + trace manifest
+  -> RAGAS fixed threshold + historical baseline gate
 ```
 
-详细运行方式见 `evals/README.md`。当前仓库**没有预置任何真实 BGE/RAGAS 数值**，因此不能把工具链存在等同于已经取得某个 Recall@K、MRR 或 Faithfulness 结果。
+详细运行方式见 `evals/README.md`。仓库还提供 **Real RAG Evaluation Baseline** 手工 Actions workflow，
+要求 self-hosted Linux runner、真实 Milvus/模型路径和独立 `EVAL_DATABASE_URL`；可选启用真实 LLM + RAGAS。
+运行报告默认落在被 Git 忽略的 `evals/results/`，workflow 只上传 artifact，不自动提交 baseline。
+
+当前仓库**没有预置任何真实 BGE/RAGAS 数值**，因此不能把工具链存在等同于已经取得某个 Recall@K、MRR 或 Faithfulness 结果。
 
 ## 后续建议
 
