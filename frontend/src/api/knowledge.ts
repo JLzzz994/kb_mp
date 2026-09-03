@@ -76,8 +76,8 @@ export interface UnitPatchInput {
 export async function patchKnowledgeUnit(
   id: number,
   input: UnitPatchInput,
-): Promise<KnowledgeUnitDetail> {
-  const { data } = await http.patch<KnowledgeUnitDetail>(`/knowledge-units/${id}`, input);
+): Promise<KnowledgeUnitItem> {
+  const { data } = await http.patch<KnowledgeUnitItem>(`/knowledge-units/${id}`, input);
   return data;
 }
 
