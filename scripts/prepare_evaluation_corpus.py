@@ -20,7 +20,12 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.config.settings import settings
-from app.evaluation.runtime import dataset_sha256, load_jsonl, write_json
+from app.evaluation.runtime import (
+    dataset_sha256,
+    load_jsonl,
+    model_config_fingerprint,
+    write_json,
+)
 from app.infrastructure.database import KnowledgeUnitRecord, UserRecord, get_session_factory
 from app.infrastructure.embedding_local import LocalBGEEmbedding
 from app.infrastructure.milvus_gateway import MilvusGateway
@@ -164,7 +169,7 @@ async def _run(args: argparse.Namespace) -> int:
         "source_dir": str(args.source_dir),
         "milvus_url": args.milvus_url,
         "collection": args.collection,
-        "embedding_model": args.embedding_model,
+        "embedding_model": model_config_fingerprint(args.embedding_model),
         "embedding_dim": dimension,
         "imported_sources": imported,
         "expected_sources": expected_sources,
