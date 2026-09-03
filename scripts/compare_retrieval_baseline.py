@@ -34,6 +34,7 @@ from app.evaluation.runtime import (
     current_git_sha,
     dataset_sha256,
     load_jsonl,
+    model_config_fingerprint,
     write_json,
 )
 from app.infrastructure.database import get_session_factory
@@ -236,9 +237,9 @@ async def _run(args: argparse.Namespace) -> int:
         "config": {
             "milvus_url": args.milvus_url,
             "collection": args.collection,
-            "embedding_model": args.embedding_model,
+            "embedding_model": model_config_fingerprint(args.embedding_model),
             "embedding_dim": settings.embedding_dim,
-            "reranker_model": args.reranker_model,
+            "reranker_model": model_config_fingerprint(args.reranker_model),
             "device": args.device,
             "fp16": args.fp16,
             "planner": "llm" if planner_llm is not None else "deterministic",
