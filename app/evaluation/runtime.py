@@ -73,7 +73,7 @@ def model_config_fingerprint(model_path: str) -> dict:
     weight_rows.sort()
     weight_digest = hashlib.sha256()
     for name, size in weight_rows:
-        weight_digest.update(f"{name}:{size}\n".encode("utf-8"))
+        weight_digest.update(f"{name}:{size}\n".encode())
 
     return {
         "path": model_path,
