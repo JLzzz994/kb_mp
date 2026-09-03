@@ -21,7 +21,14 @@ import json
 from pathlib import Path
 
 from app.config.settings import settings
-from app.evaluation.runtime import load_jsonl
+from app.evaluation.runtime import (
+    current_git_sha,
+    dataset_sha256,
+    load_jsonl,
+    model_config_fingerprint,
+    runtime_environment_fingerprint,
+    write_json,
+)
 from app.infrastructure.database import get_session_factory
 from app.infrastructure.embedding_local import LocalBGEEmbedding
 from app.infrastructure.llm_factory import build_llm
@@ -37,6 +44,7 @@ from app.workflows.state import ChatState
 
 _DEFAULT_DATASET = Path("evals/datasets/erp_wms_fixed.jsonl")
 _DEFAULT_OUTPUT = Path("evals/results/rag_traces.jsonl")
+_DEFAULT_MANIFEST = Path("evals/results/rag_trace_manifest.json")
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -135,7 +143,29 @@ async def _run(args: argparse.Namespace) -> int:
     with args.output.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-    print(f"captured={len(rows)} output={args.output}")
+    manifest = {
+        "git_sha": current_git_sha(),
+        "dataset": str(args.dataset),
+        "dataset_sha256": dataset_sha256(args.dataset),
+        "milvus_url": args.milvus_url,
+        "collection": args.collection,
+        "embedding_model": model_config_fingerprint(args.embedding_model),
+        "reranker_model": model_config_fingerprint(args.reranker_model),
+        "llm": {
+            "model": settings.openai_model,
+            "base_url": settings.openai_base_url,
+            "planner_llm": not args.disable_planner_llm,
+        },
+        "runtime": runtime_environment_fingerprint(),
+        "trace_count": len(rows),
+        "token_usage": {
+            "prompt_tokens": sum(int(row["prompt_tokens"]) for row in rows),
+            "completion_tokens": sum(int(row["completion_tokens"]) for row in rows),
+            "total_tokens": sum(int(row["total_tokens"]) for row in rows),
+        },
+    }
+    write_json(args.manifest, manifest)
+    print(f"captured={len(rows)} output={args.output} manifest={args.manifest}")
     return 0
 
 
@@ -143,6 +173,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Capture real ERP/WMS RAG traces")
     parser.add_argument("--dataset", type=Path, default=_DEFAULT_DATASET)
     parser.add_argument("--output", type=Path, default=_DEFAULT_OUTPUT)
+    parser.add_argument("--manifest", type=Path, default=_DEFAULT_MANIFEST)
     parser.add_argument("--milvus-url", required=True)
     parser.add_argument("--collection", default="kb_eval_chunks_v1")
     parser.add_argument("--embedding-model", required=True)
