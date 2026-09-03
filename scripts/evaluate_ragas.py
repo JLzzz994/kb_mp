@@ -16,9 +16,17 @@ import json
 from pathlib import Path
 
 from app.config.settings import settings
+from app.evaluation.runtime import (
+    compare_named_metrics,
+    current_git_sha,
+    dataset_sha256,
+    runtime_environment_fingerprint,
+    write_json,
+)
 
 _DEFAULT_OUTPUT = Path("evals/results/ragas_report.csv")
 _DEFAULT_BAD_CASES = Path("evals/results/ragas_bad_cases.jsonl")
+_DEFAULT_SUMMARY = Path("evals/results/ragas_summary.json")
 
 
 def _load_rows(path: Path) -> list[dict]:
@@ -159,7 +167,59 @@ async def _run(args: argparse.Namespace) -> int:
         if mean_value < threshold:
             failed_gate = True
 
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    trace_manifest = None
+    trace_manifest_path = args.trace_manifest
+    if trace_manifest_path is None:
+        candidate = args.input.with_name("rag_trace_manifest.json")
+        if candidate.is_file():
+            trace_manifest_path = candidate
+    if trace_manifest_path is not None and trace_manifest_path.is_file():
+        trace_manifest = json.loads(trace_manifest_path.read_text(encoding="utf-8"))
+
+    summary_payload = {
+        "schema_version": 1,
+        "git_sha": current_git_sha(),
+        "input": str(args.input),
+        "input_sha256": dataset_sha256(args.input),
+        "dataset_sha256": (
+            str(trace_manifest.get("dataset_sha256") or "") if trace_manifest else None
+        ),
+        "evaluator": {
+            "model": settings.openai_model,
+            "base_url": settings.openai_base_url,
+        },
+        "runtime": runtime_environment_fingerprint(),
+        "metrics": summary,
+        "thresholds": configured_thresholds,
+        "bad_case_count": len(bad_rows),
+    }
+
+    baseline_check = None
+    if args.baseline:
+        baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+        baseline_dataset_sha = baseline.get("dataset_sha256")
+        current_dataset_sha = summary_payload["dataset_sha256"]
+        if (
+            baseline_dataset_sha
+            and current_dataset_sha
+            and baseline_dataset_sha != current_dataset_sha
+        ):
+            raise RuntimeError("RAGAS baseline dataset SHA differs from current trace dataset")
+        baseline_check = compare_named_metrics(
+            summary,
+            baseline.get("metrics", {}),
+            tuple(configured_thresholds),
+            tolerance=args.regression_tolerance,
+        )
+        summary_payload["baseline_check"] = baseline_check
+        if not baseline_check["passed"]:
+            failed_gate = True
+
+    write_json(args.summary, summary_payload)
+    if args.write_baseline:
+        write_json(args.write_baseline, summary_payload)
+
+    print(json.dumps(summary_payload, ensure_ascii=False, indent=2))
     print(f"bad_cases={len(bad_rows)} report={args.output}")
     return 2 if failed_gate else 0
 
@@ -169,6 +229,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=_DEFAULT_OUTPUT)
     parser.add_argument("--bad-cases", type=Path, default=_DEFAULT_BAD_CASES)
+    parser.add_argument("--summary", type=Path, default=_DEFAULT_SUMMARY)
+    parser.add_argument("--trace-manifest", type=Path)
+    parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--write-baseline", type=Path)
+    parser.add_argument("--regression-tolerance", type=float, default=0.0)
     parser.add_argument("--min-context-precision", type=float, default=0.8)
     parser.add_argument("--min-context-recall", type=float, default=0.8)
     parser.add_argument("--min-faithfulness", type=float, default=0.85)
