@@ -1,0 +1,91 @@
+name: Real RAG Evaluation Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      milvus_url:
+        description: "Real Milvus URL reachable from the self-hosted runner"
+        required: true
+        default: "http://localhost:19530"
+        type: string
+      collection:
+        description: "Dedicated evaluation collection"
+        required: true
+        default: "kb_eval_chunks_v1"
+        type: string
+      embedding_model:
+        description: "Absolute BGE-M3 model directory on runner"
+        required: true
+        type: string
+      reranker_model:
+        description: "Absolute BGE-Reranker-Large model directory on runner"
+        required: true
+        type: string
+      device:
+        description: "cpu / cuda"
+        required: true
+        default: "cuda"
+        type: string
+      regression_tolerance:
+        description: "Allowed metric regression vs checked-in baseline"
+        required: true
+        default: "0.01"
+        type: string
+
+jobs:
+  retrieval-baseline:
+    name: real BGE retrieval baseline
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.EVAL_DATABASE_URL }}
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: eval-only-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: python3 -m pip install --user uv
+
+      - name: Validate required evaluation DB secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "EVAL_DATABASE_URL secret is required"
+            exit 1
+          fi
+
+      - name: Prepare fixed evaluation corpus
+        run: |
+          uv run --with sentence-transformers \
+            python scripts/prepare_evaluation_corpus.py \
+            --milvus-url "${{ inputs.milvus_url }}" \
+            --collection "${{ inputs.collection }}" \
+            --embedding-model "${{ inputs.embedding_model }}" \
+            --device "${{ inputs.device }}"
+
+      - name: Run RRF vs BGE-Reranker A/B
+        run: |
+          BASELINE_ARGS=()
+          if [ -f evals/baselines/erp_wms_retrieval.json ]; then
+            BASELINE_ARGS+=(--baseline evals/baselines/erp_wms_retrieval.json)
+            BASELINE_ARGS+=(--regression-tolerance "${{ inputs.regression_tolerance }}")
+          fi
+          uv run --with sentence-transformers --with FlagEmbedding \
+            python scripts/compare_retrieval_baseline.py \
+            --milvus-url "${{ inputs.milvus_url }}" \
+            --collection "${{ inputs.collection }}" \
+            --embedding-model "${{ inputs.embedding_model }}" \
+            --reranker-model "${{ inputs.reranker_model }}" \
+            --device "${{ inputs.device }}" \
+            "${BASELINE_ARGS[@]}"
+
+      - name: Upload evaluation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-wms-retrieval-evaluation-${{ github.sha }}
+          path: |
+            evals/results/corpus_prepare_report.json
+            evals/results/retrieval_ab_report.json
+          if-no-files-found: warn
