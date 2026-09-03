@@ -139,9 +139,15 @@ jobs:
 
       - name: Run RAGAS 0.4.3
         run: |
+          RAGAS_BASELINE_ARGS=()
+          if [ -f evals/baselines/erp_wms_ragas.json ]; then
+            RAGAS_BASELINE_ARGS+=(--baseline evals/baselines/erp_wms_ragas.json)
+            RAGAS_BASELINE_ARGS+=(--regression-tolerance "${{ inputs.regression_tolerance }}")
+          fi
           uv run --with ragas==0.4.3 \
             python scripts/evaluate_ragas.py \
-            --input evals/results/rag_traces.jsonl
+            --input evals/results/rag_traces.jsonl \
+            "${RAGAS_BASELINE_ARGS[@]}"
 
       - name: Upload RAGAS artifacts
         if: always()
@@ -152,5 +158,6 @@ jobs:
             evals/results/rag_traces.jsonl
             evals/results/rag_trace_manifest.json
             evals/results/ragas_report.csv
+            evals/results/ragas_summary.json
             evals/results/ragas_bad_cases.jsonl
           if-no-files-found: warn
