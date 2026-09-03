@@ -119,6 +119,7 @@ seed 数据调整为：
 | Query Rewrite / HyDE / RRF / BGE-Reranker | 已落地：关键词 + rewrite 向量 + HyDE 向量三路召回，RRF 融合，BGE 可配置精排 |
 | MinerU | 已接入 CLI/远程 API 模式，auto 失败时回退 pypdf/python-docx |
 | 固定评测 / bad case / RAGAS | 已落地固定 ERP/WMS 评测集、Hit@K/Recall@K/MRR、bad-case 分类与可选 RAGAS runner |
+| 真实模型评测基线 | 已落地固定语料自动准备、真实 BGE-M3/Milvus fail-fast、RRF vs BGE-Reranker 同候选 A/B、baseline 回归门禁与真实 LLM trace 采集；数值需真实环境执行后产生 |
 | 知识更新 / 索引一致性 | 已落地 unit 级增量重建、旧向量清理、index-status、批量 audit/repair |
 | MinIO 源文件版本管理 | 已落地 local/minio 双后端，按 unit_code + content_hash 版本化对象 key |
 | Vue 3 / Pinia / ECharts | 已完成前端真实迁移，React/TSX 残留扫描为 0 |
@@ -298,10 +299,39 @@ uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
 
 普通 CI 不调用 RAGAS 评审模型，避免每次提交消耗外部模型 token；RAGAS runner 当前评估 Context Precision、Context Recall、Faithfulness、Factual Correctness。
 
+真实模型基线工具位于：
+
+```text
+scripts/prepare_evaluation_corpus.py
+  -> 固定 expected_sources 自动准备语料
+  -> 真实 BGE-M3 embedding
+  -> 独立 Milvus collection
+  -> fail-fast，不允许 demo/vector fallback
+
+scripts/compare_retrieval_baseline.py
+  -> 同一份 RRF 候选
+  -> RRF-only vs BGE-Reranker
+  -> Hit@K / Recall@K / MRR + latency
+  -> dataset SHA / git SHA / 模型与 collection 指纹
+  -> 显式 --write-baseline 才写基线
+  -> --baseline + tolerance 做回归门禁
+
+scripts/capture_rag_eval_traces.py
+  -> real retrieve
+  -> BGE rerank
+  -> permission filter
+  -> prompt
+  -> real OpenAI-compatible LLM
+  -> rag_traces.jsonl
+  -> RAGAS
+```
+
+详细运行方式见 `evals/README.md`。当前仓库**没有预置任何真实 BGE/RAGAS 数值**，因此不能把工具链存在等同于已经取得某个 Recall@K、MRR 或 Faithfulness 结果。
+
 ## 后续建议
 
 下一阶段建议：
 
-1. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
+1. 在真实 BGE-M3 / BGE-Reranker / Milvus 环境执行已落地的 A/B 工具，人工确认后提交第一份真实 baseline；再用真实 LLM trace 跑 RAGAS。
 2. 为 MinIO source bucket 增加 lifecycle/orphan 巡检策略；真实网络 smoke 已进入 CI，但不等同于生产容灾验证。
 3. 将四维权限目标选择从当前单页组织数据加载继续优化为服务端搜索/分页，适配更大规模用户目录。
