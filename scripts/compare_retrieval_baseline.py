@@ -73,9 +73,7 @@ def _variant_payload(results, latencies: list[float], bad_cases: list[dict]) -> 
         "summary": aggregate_retrieval_metrics(results),
         "bad_case_count": len(bad_cases),
         "mean_latency_ms": fmean(latencies) if latencies else 0.0,
-        "p95_latency_ms": sorted(latencies)[
-            min(len(latencies) - 1, int(len(latencies) * 0.95))
-        ]
+        "p95_latency_ms": sorted(latencies)[min(len(latencies) - 1, int(len(latencies) * 0.95))]
         if latencies
         else 0.0,
         "bad_cases": bad_cases,
@@ -152,9 +150,7 @@ async def _run(args: argparse.Namespace) -> int:
         }
         retrieved = await retrieve_node(state, base_ctx)
         counts = dict(retrieved.get("retrieval_channel_counts") or {})
-        vector_hits = int(counts.get("vector_rewrite", 0)) + int(
-            counts.get("vector_hyde", 0)
-        )
+        vector_hits = int(counts.get("vector_rewrite", 0)) + int(counts.get("vector_hyde", 0))
         if vector_hits == 0:
             raise RuntimeError(
                 f"{case['case_id']}: vector channels returned zero hits; "
