@@ -144,7 +144,11 @@ uv run --with sentence-transformers --with FlagEmbedding \
 - 每条 case 的首个正确来源排名变化；
 - rerank 平均/P95 延迟；
 - reranker 模型 warmup 时间；
-- dataset SHA、git SHA、模型路径、collection 等版本指纹。
+- dataset SHA、git SHA、collection 等版本指纹；
+- 模型配置 metadata SHA、可识别的 snapshot revision、权重文件名+大小 manifest；
+- Python / torch / transformers / sentence-transformers / FlagEmbedding / pymilvus 等运行环境版本。
+
+> 权重 manifest 只哈希“文件名 + 文件大小”，不会读取多 GB 权重做完整内容哈希；报告会明确标注这一点。
 
 不会自动把一次运行写成“基线”。只有人工确认数据与环境后显式执行：
 
@@ -187,5 +191,51 @@ uv run --with sentence-transformers --with FlagEmbedding \
 uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
   --input evals/results/rag_traces.jsonl
 ```
+
+除 CSV/bad case 外，还会生成 `ragas_summary.json`。RAGAS 同样支持显式基线：
+
+```bash
+# 首次真实结果经人工确认后
+... --write-baseline evals/baselines/erp_wms_ragas.json
+
+# 后续版本回归门禁
+... \
+  --baseline evals/baselines/erp_wms_ragas.json \
+  --regression-tolerance 0.01
+```
+
+Context Precision / Context Recall / Faithfulness / Factual Correctness 任一平均值低于固定阈值，
+或相对历史 baseline 回退超过 tolerance，都会返回 exit code 2。
+
+### 5.4 GitHub Actions 手工真实评测
+
+仓库提供 `.github/workflows/evaluation-baseline.yml`，使用 **workflow_dispatch + self-hosted Linux runner**。
+之所以不用普通 GitHub-hosted runner，是因为真实 BGE-M3 / BGE-Reranker 模型通常体积较大，并且 Milvus/评测数据库往往位于受控网络。
+
+准备：
+
+- self-hosted Linux runner 能访问真实 Milvus；
+- runner 本地有 BGE-M3、BGE-Reranker 模型目录；
+- GitHub Secret `EVAL_DATABASE_URL` 指向独立评测数据库；
+- 如果勾选 `run_ragas`，再配置 `EVAL_OPENAI_API_KEY`，以及需要时的 `EVAL_OPENAI_BASE_URL`。
+
+在 GitHub Actions 中选择 **Real RAG Evaluation Baseline → Run workflow**，填写：
+
+- `milvus_url`
+- `collection`
+- `embedding_model`
+- `reranker_model`
+- `device`
+- `regression_tolerance`
+- 可选 `run_ragas=true` 和 `llm_model`
+
+retrieval job 上传 corpus + RRF/BGE A/B 报告；可选 RAGAS job 上传真实 trace、trace manifest、RAGAS CSV/summary/bad cases。
+workflow **不会自动提交任何 baseline**。
+
+### 5.5 语料和产物防漂移
+
+- 固定语料源文件重新解析后的 SHA 必须与评测 DB 的 `content_hash` 一致；同名旧版本会 fail-fast。
+- `evals/results/` 已加入 `.gitignore`，因为运行结果可能包含真实模型输出和本地模型路径。
+- 只有人工核对后的 `evals/baselines/*.json` 才应显式提交。
 
 只有真实跑出的报告才能写入项目指标。仓库当前不会预置虚构的 Recall@K、MRR 或 RAGAS 数值。
