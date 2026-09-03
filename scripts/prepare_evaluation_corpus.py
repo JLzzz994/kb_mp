@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from app.evaluation.runtime import (
 from app.infrastructure.database import KnowledgeUnitRecord, UserRecord, get_session_factory
 from app.infrastructure.embedding_local import LocalBGEEmbedding
 from app.infrastructure.milvus_gateway import MilvusGateway
+from app.infrastructure.parser_factory import get_parser_factory
 from app.repositories.knowledge_unit_repository import UnitPermissionRepository
 from app.services.knowledge_import_service import KnowledgeImportService
 from app.services.knowledge_index_service import KnowledgeIndexService
@@ -86,6 +88,13 @@ async def _run(args: argparse.Namespace) -> int:
     if missing_files:
         raise RuntimeError(f"evaluation source files missing: {missing_files}")
 
+    parser_factory = get_parser_factory()
+    source_hashes: dict[str, str] = {}
+    for name in expected_sources:
+        document = parser_factory.parse_document(args.source_dir / name)
+        normalized = document.text.strip()
+        source_hashes[name] = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
     embedding = LocalBGEEmbedding(model_path=args.embedding_model, device=args.device)
     milvus = MilvusGateway(uri=args.milvus_url, collection=args.collection)
     dimension = await _probe_vector_stack(embedding, milvus)
@@ -109,6 +118,16 @@ async def _run(args: argparse.Namespace) -> int:
             .all()
         )
         existing = {str(row.source_file_name): row for row in rows if row.source_file_name}
+        stale_sources = [
+            name
+            for name, record in existing.items()
+            if name in source_hashes and record.content_hash != source_hashes[name]
+        ]
+        if stale_sources:
+            raise RuntimeError(
+                "evaluation DB contains stale source versions; delete/re-import before scoring: "
+                + repr(stale_sources)
+            )
 
         missing_sources = [name for name in expected_sources if name not in existing]
         if missing_sources:
@@ -175,6 +194,7 @@ async def _run(args: argparse.Namespace) -> int:
         "runtime": runtime_environment_fingerprint(),
         "imported_sources": imported,
         "expected_sources": expected_sources,
+        "source_content_hashes": source_hashes,
         "indexed": indexed,
     }
     write_json(args.output, report)
