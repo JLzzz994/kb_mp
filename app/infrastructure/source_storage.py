@@ -372,6 +372,68 @@ class MinioSourceStorage:
 
         await asyncio.to_thread(_delete)
 
+    async def list_source_objects(self) -> list[SourceObject]:
+        prefix = f"{self._prefix}/"
+
+        def _list() -> list[SourceObject]:
+            if not self._client.bucket_exists(self._bucket):
+                return []
+            result: list[SourceObject] = []
+            for obj in self._client.list_objects(self._bucket, prefix=prefix, recursive=True):
+                object_name = str(obj.object_name)
+                relative = object_name[len(prefix) :] if object_name.startswith(prefix) else ""
+                unit_code, separator, filename = relative.partition("/")
+                stem = Path(filename).stem if filename else ""
+                malformed = (
+                    not separator
+                    or not unit_code
+                    or not filename
+                    or "/" in filename
+                    or not _is_content_hash(stem)
+                )
+                result.append(
+                    SourceObject(
+                        backend=self.backend_name,
+                        storage_key=object_name,
+                        locator=f"{self._bucket}/{object_name}",
+                        unit_code=unit_code or None,
+                        content_hash=stem if _is_content_hash(stem) else None,
+                        file_type=Path(filename).suffix.lstrip(".").lower() or None,
+                        size=getattr(obj, "size", None),
+                        modified_at=getattr(obj, "last_modified", None),
+                        malformed=malformed,
+                    )
+                )
+            return result
+
+        return await asyncio.to_thread(_list)
+
+    async def delete_source_objects(self, objects: list[SourceObject]) -> None:
+        required_prefix = f"{self._prefix}/"
+
+        def _delete() -> None:
+            from minio.deleteobjects import DeleteObject
+
+            keys: list[str] = []
+            for item in objects:
+                if item.backend != self.backend_name:
+                    raise ValueError(f"cannot delete {item.backend} object with MinIO storage")
+                if not item.storage_key.startswith(required_prefix):
+                    raise ValueError(f"object outside configured source prefix: {item.storage_key}")
+                keys.append(item.storage_key)
+            if not keys:
+                return
+            errors = list(
+                self._client.remove_objects(
+                    self._bucket,
+                    (DeleteObject(key) for key in keys),
+                )
+            )
+            if errors:
+                raise RuntimeError(f"MinIO delete failed: {errors[0]}")
+
+        await asyncio.to_thread(_delete)
+
 
 def build_source_storage() -> SourceStorage:
     backend = settings.source_storage_backend.strip().lower()
