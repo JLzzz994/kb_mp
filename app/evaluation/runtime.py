@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import subprocess
+from importlib import metadata
 from pathlib import Path
 
 
@@ -30,8 +32,16 @@ def dataset_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _snapshot_revision(root: Path) -> str | None:
+    parts = root.parts
+    for index, part in enumerate(parts[:-1]):
+        if part == "snapshots":
+            return parts[index + 1]
+    return None
+
+
 def model_config_fingerprint(model_path: str) -> dict:
-    """Hash small model metadata files without reading multi-GB weight files."""
+    """Fingerprint model metadata + weight manifest without hashing multi-GB weights."""
     root = Path(model_path)
     candidates = (
         "config.json",
@@ -54,11 +64,49 @@ def model_config_fingerprint(model_path: str) -> dict:
             digest.update(b"\0")
             digest.update(path.read_bytes())
             digest.update(b"\0")
+    weight_rows: list[tuple[str, int]] = []
+    if root.is_dir():
+        for pattern in ("*.safetensors", "*.bin", "*.pt", "*.pth"):
+            for path in root.rglob(pattern):
+                if path.is_file():
+                    weight_rows.append((str(path.relative_to(root)), path.stat().st_size))
+    weight_rows.sort()
+    weight_digest = hashlib.sha256()
+    for name, size in weight_rows:
+        weight_digest.update(f"{name}:{size}\n".encode("utf-8"))
+
     return {
         "path": model_path,
         "exists": root.exists(),
+        "snapshot_revision": _snapshot_revision(root),
         "metadata_files": files,
         "metadata_sha256": digest.hexdigest() if files else None,
+        "weight_manifest_sha256": weight_digest.hexdigest() if weight_rows else None,
+        "weight_file_count": len(weight_rows),
+        "weight_bytes": sum(size for _, size in weight_rows),
+        "weight_manifest_note": "filename+size manifest; not a full weight-content hash",
+    }
+
+
+def runtime_environment_fingerprint() -> dict:
+    distributions = (
+        "sentence-transformers",
+        "FlagEmbedding",
+        "pymilvus",
+        "torch",
+        "transformers",
+        "numpy",
+    )
+    versions: dict[str, str | None] = {}
+    for distribution in distributions:
+        try:
+            versions[distribution] = metadata.version(distribution)
+        except metadata.PackageNotFoundError:
+            versions[distribution] = None
+    return {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "packages": versions,
     }
 
 
@@ -114,5 +162,6 @@ __all__ = [
     "dataset_sha256",
     "load_jsonl",
     "model_config_fingerprint",
+    "runtime_environment_fingerprint",
     "write_json",
 ]
