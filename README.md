@@ -95,6 +95,7 @@ seed 数据调整为：
 - 登录、权限菜单、路由守卫已迁移为 Vue/Pinia。
 - 产品文档导入、知识资产、ERP/WMS 智能问答已迁移为 Vue SFC。
 - 知识资产页可直接查看 index-status，并由有权限用户触发单 unit reindex。
+- 知识资产详情已接入四维权限可视化编辑：global / department / role / user；global 与 scoped 权限互斥，scoped 维度之间按 OR 生效。
 - SSE 问答继续保留 citation / unauthorized / interrupt / final 事件处理。
 - 知识运营看板已从 Recharts 改为 **ECharts**，展示 Token 与响应时间趋势。
 - 用户页已接入创建、更新、启停用、重置密码；角色页按真实后端能力提供权限全量替换。
@@ -111,6 +112,7 @@ seed 数据调整为：
 | 文档导入/切片/向量入库 | 已升级为 MinerU 可选结构化解析 + 页码/章节切片 + chunk 级 Milvus |
 | Milvus 检索 | 已有 |
 | 权限过滤后入 Prompt | 已有并强化 |
+| 四维知识权限运营 | 已接 Vue 编辑器 + 后端全量替换；global 独占，department/role/user OR，target ID 必须真实存在 |
 | FAQ 审核 | 已有 |
 | 知识缺口 | 已有 |
 | SSE 引用返回 | 已有 |
@@ -300,6 +302,6 @@ uv run --with ragas==0.4.3 python scripts/evaluate_ragas.py \
 
 下一阶段建议：
 
-1. 把知识资产页的四维权限（global / department / role / user）从“只展示”升级为 Vue 可视化编辑器，并接现有权限替换 API。
-2. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
-3. 为 MinIO source bucket 增加 lifecycle/orphan 巡检策略；真实网络 smoke 已进入 CI，但不等同于生产容灾验证。
+1. 在有真实 Milvus/BGE/LLM 的独立 evaluation 环境沉淀版本基线，对 Recall@K、MRR、Faithfulness 做发布门禁。
+2. 为 MinIO source bucket 增加 lifecycle/orphan 巡检策略；真实网络 smoke 已进入 CI，但不等同于生产容灾验证。
+3. 将四维权限目标选择从当前单页组织数据加载继续优化为服务端搜索/分页，适配更大规模用户目录。
