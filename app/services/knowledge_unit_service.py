@@ -359,9 +359,7 @@ class KnowledgeUnitService:
         else:
             for p in req.permissions:
                 if p.target_id is None:
-                    raise InvalidPermissionConfigurationError(
-                        f"{p.target_type} requires target_id"
-                    )
+                    raise InvalidPermissionConfigurationError(f"{p.target_type} requires target_id")
             await self._validate_permission_targets(req.permissions)
         await self._perm_repo.replace_all(unit_id, entries)
         await self._session.commit()
