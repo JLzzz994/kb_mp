@@ -118,8 +118,7 @@ async def _run(args: argparse.Namespace) -> int:
                 "response": state.get("answer", ""),
                 "reference": str(case.get("reference") or ""),
                 "retrieved_contexts": [
-                    f"{item.get('title', '')}\n{item.get('content', '')}"
-                    for item in citations
+                    f"{item.get('title', '')}\n{item.get('content', '')}" for item in citations
                 ],
                 "retrieved_sources": [
                     item.get("source_file_name")
