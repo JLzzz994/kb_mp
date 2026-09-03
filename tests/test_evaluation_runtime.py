@@ -6,6 +6,7 @@ from app.evaluation.runtime import (
     compare_metric_summaries,
     dataset_sha256,
     load_jsonl,
+    model_config_fingerprint,
 )
 
 
@@ -38,3 +39,18 @@ def test_load_jsonl_and_dataset_sha(tmp_path: Path) -> None:
     rows = load_jsonl(path)
     assert [row["case_id"] for row in rows] == ["a", "b"]
     assert len(dataset_sha256(path)) == 64
+
+
+def test_model_config_fingerprint_ignores_weights(tmp_path: Path) -> None:
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text('{"hidden_size": 1024}', encoding="utf-8")
+    (model / "model.safetensors").write_bytes(b"not-hashed")
+
+    first = model_config_fingerprint(str(model))
+    (model / "model.safetensors").write_bytes(b"changed-weight-bytes")
+    second = model_config_fingerprint(str(model))
+
+    assert first["exists"] is True
+    assert first["metadata_files"] == ["config.json"]
+    assert first["metadata_sha256"] == second["metadata_sha256"]
