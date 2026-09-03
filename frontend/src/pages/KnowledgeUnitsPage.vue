@@ -24,7 +24,9 @@ import {
   type KnowledgeIndexStatus,
   type KnowledgeUnitDetail,
   type KnowledgeUnitItem,
+  type PermissionEntry,
 } from "@/api/knowledge";
+import KnowledgePermissionEditor from "@/components/knowledge/KnowledgePermissionEditor.vue";
 import PageHeader from "@/components/shared/PageHeader.vue";
 import { formatDateTime } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
@@ -103,7 +105,11 @@ async function save() {
       summary: edit.summary.trim(),
       content: edit.content,
     });
-    detail.value = updated;
+    detail.value = await getKnowledgeUnit(updated.id);
+    edit.title = detail.value.title;
+    edit.category = detail.value.category ?? "";
+    edit.summary = detail.value.summary ?? "";
+    edit.content = detail.value.content;
     indexStatus.value = await getKnowledgeIndexStatus(updated.id).catch(() => null);
     await load();
   } catch (err) {
@@ -147,6 +153,23 @@ async function remove() {
   } finally {
     deleting.value = false;
   }
+}
+
+async function handlePermissionsSaved(permissions: PermissionEntry[]) {
+  if (!detail.value) return;
+  detail.value = {
+    ...detail.value,
+    permissions,
+    permissions_summary:
+      permissions.length === 1 && permissions[0]?.target_type === "global"
+        ? "全局公开"
+        : permissions
+            .slice(0, 3)
+            .map((item) => item.target_label || item.target_type)
+            .join(" + ") + (permissions.length > 3 ? "…" : ""),
+  };
+  panelError.value = null;
+  await load();
 }
 
 function submitSearch() {
@@ -314,14 +337,25 @@ onMounted(() => void load());
             </label>
 
             <div>
-              <p class="text-xs font-medium text-secondarytext">权限范围</p>
+              <p class="text-xs font-medium text-secondarytext">当前权限范围</p>
               <div class="mt-2 flex flex-wrap gap-2">
-                <span v-for="permission in detail.permissions" :key="`${permission.target_type}-${permission.target_id}`" class="rounded-full bg-white px-3 py-1 text-xs text-ink ring-1 ring-boundary">
+                <span
+                  v-for="permission in detail.permissions"
+                  :key="`${permission.target_type}-${permission.target_id}`"
+                  class="rounded-full bg-white px-3 py-1 text-xs text-ink ring-1 ring-boundary"
+                >
                   {{ permission.target_type }} · {{ permission.target_label }}
                 </span>
                 <span v-if="!detail.permissions.length" class="text-xs text-secondarytext">未配置</span>
               </div>
             </div>
+
+            <KnowledgePermissionEditor
+              v-if="auth.can('knowledge:assign_permission')"
+              :unit-id="detail.id"
+              :permissions="detail.permissions"
+              @saved="handlePermissionsSaved"
+            />
           </div>
 
           <div class="mt-6 flex flex-wrap justify-end gap-2 border-t border-boundary pt-4">
