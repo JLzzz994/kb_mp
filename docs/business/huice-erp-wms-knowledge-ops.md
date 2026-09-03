@@ -82,6 +82,10 @@
 - Hit@K / Recall@K / MRR；
 - no_recall / source_miss / low_rank / low_confidence bad-case 分类；
 - 可选 RAGAS runner：Context Precision / Recall、Faithfulness、Factual Correctness；
+- 真实评测语料准备脚本：固定 expected_sources，真实 BGE-M3 建索引，Milvus/BGE 不可用时 fail-fast；
+- RRF-only 与 BGE-Reranker 使用同一候选集做 A/B，对比 Hit@K / Recall@K / MRR 与 rerank 延迟；
+- baseline 只有显式 --write-baseline 才写入，后续可按 dataset SHA 和 regression tolerance 做回归门禁；
+- 真实 LLM trace 采集已打通 retrieve -> rerank -> permission -> prompt -> generate -> RAGAS 输入；
 - unit 级增量重建，不全量刷新 Milvus collection；
 - PATCH content 触发重新切片 + Embedding + 旧 chunk 清理；
 - PATCH title/category 仅同步 Milvus 元数据，不重复 Embedding；
@@ -114,7 +118,7 @@
 
 当前仍未完整做实：
 
-- 使用真实线上/预发语料跑出的 RAGAS 数值基线（runner 已有，但不能伪造结果）；
+- 第一份真实 BGE-M3/BGE-Reranker/Milvus A/B 数值和真实 LLM/RAGAS 数值尚未执行并提交；工具链已具备，但不能伪造结果；
 - 四维权限目标用户目前按前端单页列表加载，超大组织目录仍建议改成服务端搜索/分页；
 - MinIO 的真实 CI smoke 只验证单节点网络读写，不等同于生产多副本、备份恢复和 bucket lifecycle 容灾验证。
 
