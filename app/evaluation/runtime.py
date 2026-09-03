@@ -140,7 +140,7 @@ def compare_named_metrics(
         baseline_value = float(baseline.get(metric, 0.0))
         delta = current_value - baseline_value
         deltas[metric] = delta
-        if delta < -abs(tolerance):
+        if delta < -abs(tolerance) - 1e-12:
             regressions.append(metric)
     return {
         "tolerance": abs(tolerance),
