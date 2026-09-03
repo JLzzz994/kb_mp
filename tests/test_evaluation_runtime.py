@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.evaluation.runtime import (
     compare_metric_summaries,
+    compare_named_metrics,
     dataset_sha256,
     load_jsonl,
     model_config_fingerprint,
@@ -65,3 +66,29 @@ def test_runtime_environment_fingerprint_has_python_and_packages() -> None:
     assert fingerprint["python"]
     assert "platform" in fingerprint
     assert "pymilvus" in fingerprint["packages"]
+
+
+def test_compare_named_metrics_supports_ragas_metrics() -> None:
+    result = compare_named_metrics(
+        {
+            "context_precision": 0.91,
+            "context_recall": 0.79,
+            "faithfulness": 0.9,
+            "factual_correctness": 0.84,
+        },
+        {
+            "context_precision": 0.9,
+            "context_recall": 0.82,
+            "faithfulness": 0.9,
+            "factual_correctness": 0.85,
+        },
+        (
+            "context_precision",
+            "context_recall",
+            "faithfulness",
+            "factual_correctness",
+        ),
+        tolerance=0.01,
+    )
+    assert result["passed"] is False
+    assert result["regressions"] == ["context_recall"]
