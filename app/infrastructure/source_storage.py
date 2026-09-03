@@ -160,6 +160,76 @@ class LocalSourceStorage:
 
         await asyncio.to_thread(_delete)
 
+    async def list_source_objects(self) -> list[SourceObject]:
+        root = get_storage_dir()
+        version_root = root / self._prefix
+
+        def _list() -> list[SourceObject]:
+            objects: list[SourceObject] = []
+            if version_root.exists():
+                for path in sorted(version_root.glob("*/*")):
+                    if not path.is_file():
+                        continue
+                    relative = path.relative_to(version_root)
+                    unit_code = relative.parts[0] if len(relative.parts) >= 2 else None
+                    stem = path.stem
+                    stat = path.stat()
+                    objects.append(
+                        SourceObject(
+                            backend=self.backend_name,
+                            storage_key=str(path.relative_to(root)),
+                            locator=str(path),
+                            unit_code=unit_code,
+                            content_hash=stem if _is_content_hash(stem) else None,
+                            file_type=path.suffix.lstrip(".").lower() or None,
+                            size=stat.st_size,
+                            modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                            malformed=unit_code is None or not _is_content_hash(stem),
+                        )
+                    )
+
+            # Only KU-* is a legacy archive. UUID upload temp files must not be audited.
+            for path in sorted(root.glob("KU-*.*")):
+                if not path.is_file():
+                    continue
+                stat = path.stat()
+                objects.append(
+                    SourceObject(
+                        backend=self.backend_name,
+                        storage_key=path.name,
+                        locator=str(path),
+                        unit_code=path.stem,
+                        content_hash=None,
+                        file_type=path.suffix.lstrip(".").lower() or None,
+                        size=stat.st_size,
+                        modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                        legacy=True,
+                    )
+                )
+            return objects
+
+        return await asyncio.to_thread(_list)
+
+    async def delete_source_objects(self, objects: list[SourceObject]) -> None:
+        root = get_storage_dir().resolve()
+
+        def _delete() -> None:
+            for item in objects:
+                if item.backend != self.backend_name:
+                    raise ValueError(f"cannot delete {item.backend} object with local storage")
+                path = (root / item.storage_key).resolve()
+                if not path.is_relative_to(root):
+                    raise ValueError(f"source object escapes storage root: {item.storage_key}")
+                path.unlink(missing_ok=True)
+                parent = path.parent
+                if parent != root and parent != root / self._prefix:
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        pass
+
+        await asyncio.to_thread(_delete)
+
 
 class MinioSourceStorage:
     backend_name = "minio"
