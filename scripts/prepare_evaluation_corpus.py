@@ -24,6 +24,7 @@ from app.evaluation.runtime import (
     dataset_sha256,
     load_jsonl,
     model_config_fingerprint,
+    runtime_environment_fingerprint,
     write_json,
 )
 from app.infrastructure.database import KnowledgeUnitRecord, UserRecord, get_session_factory
@@ -171,6 +172,7 @@ async def _run(args: argparse.Namespace) -> int:
         "collection": args.collection,
         "embedding_model": model_config_fingerprint(args.embedding_model),
         "embedding_dim": dimension,
+        "runtime": runtime_environment_fingerprint(),
         "imported_sources": imported,
         "expected_sources": expected_sources,
         "indexed": indexed,
