@@ -40,3 +40,6 @@ storage/
 
 # 交付物中的已编译前端产物（可在本地重新构建）
 交付物/06-已编译前端/
+# RAG evaluation runtime artifacts may contain model outputs / local paths.
+# Only evals/baselines/ is intended for explicitly reviewed, committed baselines.
+evals/results/
