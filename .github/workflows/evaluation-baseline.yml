@@ -31,6 +31,16 @@ on:
         required: true
         default: "0.01"
         type: string
+      run_ragas:
+        description: "Also capture real LLM traces and run RAGAS"
+        required: true
+        default: false
+        type: boolean
+      llm_model:
+        description: "OpenAI-compatible model used for answer generation and RAGAS judge"
+        required: true
+        default: "gpt-4o-mini"
+        type: string
 
 jobs:
   retrieval-baseline:
@@ -88,4 +98,59 @@ jobs:
           path: |
             evals/results/corpus_prepare_report.json
             evals/results/retrieval_ab_report.json
+          if-no-files-found: warn
+
+  ragas-quality:
+    name: real LLM + RAGAS quality
+    if: ${{ inputs.run_ragas }}
+    needs: retrieval-baseline
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.EVAL_DATABASE_URL }}
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: eval-only-secret
+      OPENAI_API_KEY: ${{ secrets.EVAL_OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.EVAL_OPENAI_BASE_URL }}
+      OPENAI_MODEL: ${{ inputs.llm_model }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: python3 -m pip install --user uv
+
+      - name: Validate evaluation LLM secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "EVAL_OPENAI_API_KEY secret is required when run_ragas=true"
+            exit 1
+          fi
+
+      - name: Capture real RAG traces
+        run: |
+          uv run --with sentence-transformers --with FlagEmbedding \
+            python scripts/capture_rag_eval_traces.py \
+            --milvus-url "${{ inputs.milvus_url }}" \
+            --collection "${{ inputs.collection }}" \
+            --embedding-model "${{ inputs.embedding_model }}" \
+            --reranker-model "${{ inputs.reranker_model }}" \
+            --device "${{ inputs.device }}"
+
+      - name: Run RAGAS 0.4.3
+        run: |
+          uv run --with ragas==0.4.3 \
+            python scripts/evaluate_ragas.py \
+            --input evals/results/rag_traces.jsonl
+
+      - name: Upload RAGAS artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-wms-ragas-evaluation-${{ github.sha }}
+          path: |
+            evals/results/rag_traces.jsonl
+            evals/results/rag_trace_manifest.json
+            evals/results/ragas_report.csv
+            evals/results/ragas_bad_cases.jsonl
           if-no-files-found: warn
