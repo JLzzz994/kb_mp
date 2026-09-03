@@ -7,6 +7,7 @@ from app.evaluation.runtime import (
     dataset_sha256,
     load_jsonl,
     model_config_fingerprint,
+    runtime_environment_fingerprint,
 )
 
 
@@ -54,3 +55,13 @@ def test_model_config_fingerprint_ignores_weights(tmp_path: Path) -> None:
     assert first["exists"] is True
     assert first["metadata_files"] == ["config.json"]
     assert first["metadata_sha256"] == second["metadata_sha256"]
+    assert first["weight_file_count"] == 1
+    assert first["weight_manifest_sha256"] == second["weight_manifest_sha256"]
+    assert "not a full weight-content hash" in first["weight_manifest_note"]
+
+
+def test_runtime_environment_fingerprint_has_python_and_packages() -> None:
+    fingerprint = runtime_environment_fingerprint()
+    assert fingerprint["python"]
+    assert "platform" in fingerprint
+    assert "pymilvus" in fingerprint["packages"]
