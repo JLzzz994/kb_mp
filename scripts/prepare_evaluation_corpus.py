@@ -76,9 +76,7 @@ async def _run(args: argparse.Namespace) -> int:
     if not expected_sources:
         raise RuntimeError("evaluation dataset has no expected_sources")
 
-    missing_files = [
-        name for name in expected_sources if not (args.source_dir / name).is_file()
-    ]
+    missing_files = [name for name in expected_sources if not (args.source_dir / name).is_file()]
     if missing_files:
         raise RuntimeError(f"evaluation source files missing: {missing_files}")
 
@@ -110,10 +108,7 @@ async def _run(args: argparse.Namespace) -> int:
         if missing_sources:
             importer = KnowledgeImportService(session)
             response = await importer.import_files(
-                files=[
-                    (name, (args.source_dir / name).read_bytes())
-                    for name in missing_sources
-                ],
+                files=[(name, (args.source_dir / name).read_bytes()) for name in missing_sources],
                 user_id=creator_id,
             )
             if response.rejected:
