@@ -96,6 +96,8 @@ def runtime_environment_fingerprint() -> dict:
         "torch",
         "transformers",
         "numpy",
+        "ragas",
+        "openai",
     )
     versions: dict[str, str | None] = {}
     for distribution in distributions:
@@ -124,16 +126,16 @@ def current_git_sha() -> str:
         return "unknown"
 
 
-def compare_metric_summaries(
+def compare_named_metrics(
     current: dict[str, float | int],
     baseline: dict[str, float | int],
+    metric_names: tuple[str, ...],
     *,
     tolerance: float = 0.0,
 ) -> dict:
-    metrics = ("hit_at_k", "recall_at_k", "mrr")
     deltas: dict[str, float] = {}
     regressions: list[str] = []
-    for metric in metrics:
+    for metric in metric_names:
         current_value = float(current.get(metric, 0.0))
         baseline_value = float(baseline.get(metric, 0.0))
         delta = current_value - baseline_value
@@ -148,6 +150,20 @@ def compare_metric_summaries(
     }
 
 
+def compare_metric_summaries(
+    current: dict[str, float | int],
+    baseline: dict[str, float | int],
+    *,
+    tolerance: float = 0.0,
+) -> dict:
+    return compare_named_metrics(
+        current,
+        baseline,
+        ("hit_at_k", "recall_at_k", "mrr"),
+        tolerance=tolerance,
+    )
+
+
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -158,6 +174,7 @@ def write_json(path: Path, payload: dict) -> None:
 
 __all__ = [
     "compare_metric_summaries",
+    "compare_named_metrics",
     "current_git_sha",
     "dataset_sha256",
     "load_jsonl",
