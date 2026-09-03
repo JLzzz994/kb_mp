@@ -7,6 +7,7 @@ import mimetypes
 import shutil
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlparse
@@ -33,6 +34,20 @@ class MaterializedSource:
             remove_file(self.path)
 
 
+@dataclass(slots=True)
+class SourceObject:
+    backend: str
+    storage_key: str
+    locator: str
+    unit_code: str | None
+    content_hash: str | None
+    file_type: str | None
+    size: int | None = None
+    modified_at: datetime | None = None
+    legacy: bool = False
+    malformed: bool = False
+
+
 class SourceStorage(Protocol):
     backend_name: str
 
@@ -55,6 +70,10 @@ class SourceStorage(Protocol):
 
     async def delete_unit_sources(self, unit_code: str) -> None: ...
 
+    async def list_source_objects(self) -> list[SourceObject]: ...
+
+    async def delete_source_objects(self, objects: list[SourceObject]) -> None: ...
+
 
 def _extension(file_type: str | None, path: Path | None = None) -> str:
     if file_type:
@@ -62,6 +81,10 @@ def _extension(file_type: str | None, path: Path | None = None) -> str:
     if path is not None:
         return path.suffix.lower().lstrip(".")
     return ""
+
+
+def _is_content_hash(value: str) -> bool:
+    return len(value) == 64 and all(char in "0123456789abcdefABCDEF" for char in value)
 
 
 class LocalSourceStorage:
@@ -294,6 +317,7 @@ __all__ = [
     "MaterializedSource",
     "MinioSourceStorage",
     "SourceArchiveResult",
+    "SourceObject",
     "SourceStorage",
     "build_source_storage",
 ]
