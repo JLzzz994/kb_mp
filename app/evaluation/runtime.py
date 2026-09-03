@@ -30,6 +30,38 @@ def dataset_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def model_config_fingerprint(model_path: str) -> dict:
+    """Hash small model metadata files without reading multi-GB weight files."""
+    root = Path(model_path)
+    candidates = (
+        "config.json",
+        "configuration.json",
+        "modules.json",
+        "sentence_bert_config.json",
+        "config_sentence_transformers.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+    )
+    digest = hashlib.sha256()
+    files: list[str] = []
+    if root.is_dir():
+        for name in candidates:
+            path = root / name
+            if not path.is_file():
+                continue
+            files.append(name)
+            digest.update(name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return {
+        "path": model_path,
+        "exists": root.exists(),
+        "metadata_files": files,
+        "metadata_sha256": digest.hexdigest() if files else None,
+    }
+
+
 def current_git_sha() -> str:
     env_sha = os.getenv("GITHUB_SHA", "").strip()
     if env_sha:
@@ -81,5 +113,6 @@ __all__ = [
     "current_git_sha",
     "dataset_sha256",
     "load_jsonl",
+    "model_config_fingerprint",
     "write_json",
 ]
