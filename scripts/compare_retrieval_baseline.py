@@ -35,6 +35,7 @@ from app.evaluation.runtime import (
     dataset_sha256,
     load_jsonl,
     model_config_fingerprint,
+    runtime_environment_fingerprint,
     write_json,
 )
 from app.infrastructure.database import get_session_factory
@@ -249,6 +250,7 @@ async def _run(args: argparse.Namespace) -> int:
             "retrieval_rrf_k": settings.retrieval_rrf_k,
             "rerank_top_k": settings.rerank_top_k,
         },
+        "runtime": runtime_environment_fingerprint(),
         "reranker_warmup_ms": reranker_warmup_ms,
         "retrieval_channel_counts": channel_counts,
         "rrf_only": base_payload,
